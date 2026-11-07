@@ -1,0 +1,28 @@
+.admin { min-height: 100vh; background: var(--ground); color: var(--text); display: flex; flex-wrap: wrap; }
+.admin__side {
+  flex: 1 1 240px; max-width: 100%; background: var(--ink); padding: 24px 16px;
+  display: flex; flex-direction: column; gap: 24px;
+}
+.admin__brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+.admin__brand span { font-family: var(--font-display); font-weight: 600; font-size: 18px; color: #fff; }
+.admin__nav { display: flex; flex-direction: column; gap: 4px; }
+.admin__nav a {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px;
+  border-radius: 12px; color: var(--on-dark); text-decoration: none; font-size: 14px;
+}
+.admin__nav a:hover, .admin__nav a.is-active { background: var(--ink-2); color: #fff; }
+.admin__user { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: var(--ink-3); }
+.admin__avatar {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; flex: none;
+}
+.admin__user-text { display: flex; flex-direction: column; min-width: 0; font-size: 14px; color: #fff; }
+.admin__user-meta { font-size: 12px; color: var(--muted-dark); }
+.admin__main {
+  flex: 999 1 560px; min-width: 0; padding: clamp(16px, 3vw, 40px);
+  display: flex; flex-direction: column; gap: 24px;
+}
+.admin-header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; }
+.admin-header__titles { display: flex; flex-direction: column; gap: 6px; }
+.admin-title { font-family: var(--font-display); font-weight: 300; font-size: clamp(26px, 3vw, 36px); color: var(--ink); }
+.admin-header__actions { display: flex; flex-wrap: wrap; gap: 10px; }

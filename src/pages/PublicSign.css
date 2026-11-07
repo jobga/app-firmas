@@ -1,0 +1,52 @@
+.pub { position: relative; min-height: 100vh; background: var(--ev-bg); color: var(--ev-text); overflow: hidden; }
+.pub a { color: var(--accent); }
+.pub__header, .pub__main { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; }
+.pub__header { padding: 24px 24px 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.pub__org { display: flex; align-items: center; gap: 12px; }
+.pub__logo { width: 48px; height: 48px; border-radius: 14px; border: 1px solid var(--line-input); background: #fff; display: flex; align-items: center; justify-content: center; }
+.pub__org-text { display: flex; flex-direction: column; }
+.pub__org-name { font-family: var(--font-display); font-weight: 600; font-size: 16px; color: var(--ev-title); }
+.pub__policy-link { font-size: 14px; font-weight: 500; min-height: 44px; display: inline-flex; align-items: center; }
+
+.pub__main { padding: 40px 24px 64px; display: flex; flex-wrap: wrap; gap: 48px; align-items: flex-start; }
+.pub__intro { flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 24px; padding-top: 24px; }
+.pub__badge { align-self: flex-start; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid var(--ev-title); color: var(--ev-title); border-radius: 999px; padding: 6px 12px; }
+.pub__title { font-family: var(--font-display); font-weight: 300; font-size: clamp(36px, 5vw, 60px); line-height: 1.05; letter-spacing: -0.02em; color: var(--ev-title); }
+.pub__desc { font-size: 17px; line-height: 1.6; max-width: 520px; }
+.pub__stats { display: flex; flex-wrap: wrap; gap: 32px; }
+.pub__stat { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.pub__stat strong { font-family: var(--font-display); font-size: 28px; font-weight: 500; color: var(--ev-title); }
+
+.pub__panel {
+  flex: 1 1 520px; max-width: 640px; min-width: 0; background: #fff; border: 1px solid var(--line);
+  border-radius: 24px; padding: clamp(20px, 4vw, 40px); display: flex; flex-direction: column; gap: 28px;
+  box-shadow: var(--shadow-lift);
+}
+.steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; }
+.steps li { flex: 1 1 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.steps__bar { height: 4px; border-radius: 4px; background: var(--line); }
+.steps li.is-done .steps__bar { background: var(--ev-button); }
+.steps__label { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.steps li[aria-current='step'] .steps__label { color: var(--ink); font-weight: 600; }
+
+.step { display: flex; flex-direction: column; gap: 20px; }
+.step__head { display: flex; flex-direction: column; gap: 4px; }
+.step__title { font-family: var(--font-display); font-weight: 500; font-size: 24px; color: var(--ev-title); }
+.step__sub { font-size: 14px; }
+
+.consent { display: flex; flex-direction: column; gap: 12px; background: var(--surface-2); border-radius: 16px; padding: 16px; }
+.consent label { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; cursor: pointer; }
+.consent input { accent-color: var(--ev-button); width: 20px; height: 20px; margin: 2px 0 0; flex: none; }
+
+.sig-pad { position: relative; border: 1.5px dashed var(--line-dashed); border-radius: 18px; background: var(--surface-3); height: 240px; overflow: hidden; }
+.sig-pad__canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.sig-pad__line { position: absolute; left: 24px; right: 24px; bottom: 56px; border-top: 1px solid var(--line-input); pointer-events: none; }
+.sig-pad__hint { position: absolute; left: 24px; bottom: 28px; font-size: 12px; color: var(--muted); pointer-events: none; }
+
+.icon-tile { width: 56px; height: 56px; border-radius: 16px; border: 1px solid var(--line-input); display: flex; align-items: center; justify-content: center; }
+.done { align-items: center; text-align: center; padding: 16px 0; }
+.done__receipt { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: center; font-size: 13px; background: var(--surface-2); border-radius: 14px; padding: 14px 18px; }
+
+.pub__secure { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line-soft); padding-top: 16px; }
+.pub__footer { position: relative; z-index: 1; text-align: center; padding: 0 24px 32px; font-size: 12px; }
+.pub__footer strong { font-family: var(--font-display); color: var(--ev-title); }

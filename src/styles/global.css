@@ -1,0 +1,152 @@
+/* Design tokens — Animalista */
+:root {
+  --ink: #161616;
+  --ink-2: #2a2a28;
+  --ink-3: #222220;
+  --text: #3d3b36;
+  --muted: #6b6860;
+  --muted-dark: #a8a59d;
+  --on-dark: #c9c6be;
+  --on-dark-2: #e9e7e1;
+  --ground: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #f4f3ef;
+  --surface-3: #fcfcfa;
+  --line: #e4e2dc;
+  --line-soft: #efede8;
+  --line-input: #cfccc4;
+  --line-dashed: #b9b6ad;
+  --accent: #2c4bff;
+  --accent-hover: #1a2fb0;
+  --accent-soft: #e8ecff;
+  --accent-light: #9ba9ff;
+  --orange: #e07a1f;
+  --orange-light: #f0a35e;
+  --ok-bg: #e3f1ea;
+  --ok-fg: #1d6b45;
+  --warn-bg: #fbe7cc;
+  --warn-fg: #7a4a0c;
+  --note-bg: #fff6e5;
+  --note-fg: #4a3a12;
+  --bad-fg: #a3361b;
+  --neutral-fg: #55524b;
+
+  --font-body: Inter, system-ui, sans-serif;
+  --font-display: Sora, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --shadow-lift: 0 24px 60px -30px rgba(22, 22, 22, 0.25);
+  --focus-ring: 0 0 0 3px rgba(44, 75, 255, 0.15);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }
+h1, h2, h3, p { margin: 0; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* ---------- Form primitives ---------- */
+.lbl { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; color: inherit; }
+.lbl--full { grid-column: 1 / -1; }
+.field {
+  font: inherit; font-size: 15px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-input); border-radius: 12px; padding: 12px 14px;
+  min-height: 46px; width: 100%; outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.field:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+textarea.field { resize: vertical; line-height: 1.5; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid var(--line-input); border-radius: 999px; padding: 10px 14px;
+  font-size: 14px; cursor: pointer; min-height: 44px;
+}
+.chip input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.fieldset legend { font-size: 13px; font-weight: 500; margin-bottom: 10px; padding: 0; }
+
+.check-row { display: flex; align-items: center; gap: 10px; font-size: 14px; min-height: 44px; cursor: pointer; }
+.check-row input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; }
+
+.grid-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 0 18px; border-radius: 14px; border: 0;
+  font: 500 15px var(--font-body); cursor: pointer; text-decoration: none;
+}
+.btn--primary { background: var(--btn-bg, var(--accent)); color: #fff; font-weight: 600; padding: 0 22px; }
+.btn--primary:hover { color: #fff; filter: brightness(0.94); }
+.btn--outline { background: var(--surface); color: var(--ink); border: 1px solid var(--line-input); }
+.btn--ghost { background: transparent; color: var(--ink); }
+.btn--dashed { background: transparent; color: var(--ink); border: 1px dashed var(--line-dashed); border-radius: 12px; min-height: 44px; padding: 0 14px; font-size: 14px; }
+.btn--lg { min-height: 52px; font-size: 16px; }
+.btn--sm { min-height: 44px; border-radius: 12px; font-size: 14px; padding: 0 16px; }
+.btn--block { align-self: stretch; width: 100%; }
+
+.btn-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn-row--between { justify-content: space-between; }
+.btn-row--end { justify-content: flex-end; }
+.btn-row--center { justify-content: center; }
+
+/* ---------- Code (OTP) input ---------- */
+.code-group { display: flex; gap: 8px; flex-wrap: nowrap; }
+.code {
+  width: 52px; height: 60px; text-align: center; font: 600 24px var(--font-display);
+  border: 1px solid var(--line-input); border-radius: 12px; background: var(--surface);
+  color: var(--ink); outline: none;
+}
+.code--sm { width: 48px; height: 56px; font-size: 22px; }
+.code:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+@media (max-width: 560px) {
+  .code { width: 42px; height: 52px; font-size: 20px; }
+  .code--sm { width: 40px; height: 50px; font-size: 19px; }
+}
+
+/* ---------- Misc ---------- */
+.pill {
+  align-self: flex-start; font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; border-radius: 999px; padding: 6px 12px;
+}
+.pill--accent { color: var(--accent); background: var(--accent-soft); }
+.pill--warn { color: var(--warn-fg); background: var(--warn-bg); font-size: 11px; padding: 4px 10px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 20px;
+  padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0;
+}
+.card--roomy { padding: 24px; gap: 18px; }
+.card-title { font-family: var(--font-display); font-weight: 500; font-size: 16px; color: var(--ink); }
+.card-title--lg { font-size: 18px; }
+
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.xsmall { font-size: 12px; }
+
+/* ---------- Animations ---------- */
+.draw path { stroke-dasharray: 1400; stroke-dashoffset: 1400; animation: draw 4.5s ease-in-out infinite alternate; }
+.draw--slow path { animation-duration: 5s; }
+.draw path.delayed { animation-delay: 1.2s; }
+@keyframes draw { 0% { stroke-dashoffset: 1400; } 60%, 100% { stroke-dashoffset: 0; } }
+
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise 0.6s ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .draw path { animation: none; stroke-dashoffset: 0; }
+  .rise { animation: none; }
+}
