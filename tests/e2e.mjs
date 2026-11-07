@@ -57,6 +57,14 @@ function totp(secret, offset = 0) {
   return String((h.readUInt32BE(o) & 0x7fffffff) % 1_000_000).padStart(6, '0');
 }
 
+// El servidor rechaza reutilizar un código: espera al siguiente intervalo de 30 s si hace falta.
+let lastTotpCounter = -1;
+async function freshTotp(secret) {
+  while (Math.floor(Date.now() / 30000) <= lastTotpCounter) await new Promise((r) => setTimeout(r, 500));
+  lastTotpCounter = Math.floor(Date.now() / 30000);
+  return totp(secret);
+}
+
 // ---------- Servidor SMTP de prueba ----------
 const inbox = [];
 function decodeMail(raw) {
@@ -72,7 +80,7 @@ const smtp = createServer((sock) => {
     while ((i = buf.indexOf('\r\n')) >= 0) {
       const line = buf.slice(0, i); buf = buf.slice(i + 2);
       if (data) {
-        if (line === '.') { inbox.push({ to, text: decodeMail(msg) }); data = false; msg = ''; sock.write('250 ok\r\n'); }
+        if (line === '.') { inbox.push({ to, text: decodeMail(msg), raw: msg }); data = false; msg = ''; sock.write('250 ok\r\n'); }
         else msg += line + '\r\n';
         continue;
       }
@@ -200,7 +208,7 @@ async function main() {
     await page.waitForSelector('.alert--error:has-text("Código incorrecto")');
   });
   await test('un código TOTP correcto activa 2FA y entrega 10 códigos de recuperación', async () => {
-    await fillCode(page, totp(secret));
+    await fillCode(page, await freshTotp(secret));
     await page.click('text=Activar y entrar al panel');
     await page.waitForSelector('text=Guarda tus códigos de recuperación');
     recoveryCodes = await page.locator('.recovery code').allTextContents();
@@ -302,12 +310,21 @@ async function main() {
     folio = (await pub.textContent('.done__receipt')).match(/AN-\d{6}/)[0];
     await pub.screenshot({ path: `${SHOTS}/05-firmada.png`, fullPage: true });
   });
-  await test('llega el correo con el comprobante', async () => {
+  await test('llega el correo con el comprobante y el PDF adjunto', async () => {
     await new Promise((r) => setTimeout(r, 500));
-    assert(inbox.some((m) => m.to === signer.email && m.text.includes(folio) && /Huella: [a-f0-9]{64}/.test(m.text)), 'No llegó el comprobante');
+    const mail = inbox.find((m) => m.to === signer.email && m.text.includes(folio) && /Huella: [a-f0-9]{64}/.test(m.text));
+    assert(mail, 'No llegó el comprobante');
+    assert(mail.raw.includes('Content-Type: application/pdf') && mail.raw.includes(`filename="comprobante-${folio}.pdf"`), 'El correo no trae el PDF adjunto');
+  });
+  await test('«Descargar comprobante» descarga un PDF válido', async () => {
+    const [download] = await Promise.all([pub.waitForEvent('download'), pub.click('text=Descargar comprobante')]);
+    assert(download.suggestedFilename() === `comprobante-${folio}.pdf`, `Nombre inesperado: ${download.suggestedFilename()}`);
+    const buf = await (await import('node:fs/promises')).readFile(await download.path());
+    assert(buf.subarray(0, 5).toString() === '%PDF-' && buf.includes('%%EOF'), 'El archivo no es un PDF');
+    assert(buf.includes(Buffer.from(folio)), 'El PDF no contiene el folio');
   });
   await test('el comprobante muestra folio, huella y firma', async () => {
-    await pub.click('text=Descargar comprobante');
+    await pub.click('text=Ver comprobante en línea');
     await pub.waitForSelector('text=Comprobante de firma verificada');
     assert((await pub.textContent('.rcpt__data')).includes(folio), 'El comprobante no muestra el folio');
     assert(await pub.locator('.rcpt__sig img').count() === 1, 'El comprobante no muestra la firma');
@@ -417,7 +434,65 @@ async function main() {
     assert(r.status() === 422, `Respondió ${r.status()}`);
   });
 
-  section('7. Diseño adaptable');
+  section('7. Recuperación de contraseña');
+  const NEW_PASS = 'NuevaClave2026!';
+  let resetLink = '';
+  let usedCode = '';
+  await test('un correo desconocido recibe la misma respuesta y no genera envío', async () => {
+    const before = inbox.length;
+    const r = await anon.request.post(`${BASE}/api/admin/password/forgot`, { headers: H, data: { email: 'nadie@example.com' } });
+    assert(r.status() === 200, `Respondió ${r.status()}`);
+    await new Promise((res) => setTimeout(res, 400));
+    assert(inbox.length === before, 'Se envió un correo a una cuenta inexistente');
+  });
+  await test('«¿Olvidaste tu contraseña?» envía un enlace por correo', async () => {
+    const f = await (await browser.newContext()).newPage();
+    await f.goto(BASE + '/admin/acceso');
+    await f.click('text=¿Olvidaste tu contraseña?');
+    await f.fill('[name=email]', ADMIN.email);
+    await f.click('text=Enviar enlace');
+    await f.waitForSelector('text=Revisa tu correo');
+    for (let i = 0; i < 30 && !resetLink; i++) {
+      const m = [...inbox].reverse().find((x) => x.to === ADMIN.email && x.text.includes('/admin/restablecer/'));
+      if (m) resetLink = m.text.match(/https?:\/\/\S+\/admin\/restablecer\/[a-f0-9]{64}/)[0];
+      else await new Promise((res) => setTimeout(res, 150));
+    }
+    assert(resetLink, 'No llegó el enlace');
+  });
+  await test('el enlace permite crear una contraseña nueva', async () => {
+    const f = await (await browser.newContext()).newPage();
+    await f.goto(resetLink.replace(/^https?:\/\/[^/]+/, BASE));
+    await f.fill('[name=password]', NEW_PASS); await f.fill('[name=password2]', NEW_PASS);
+    await f.click('text=Guardar contraseña');
+    await f.waitForSelector('text=Contraseña actualizada');
+  });
+  await test('el enlace no sirve dos veces', async () => {
+    const token = resetLink.split('/').pop();
+    const r = await anon.request.post(`${BASE}/api/admin/password/reset`, { headers: H, data: { token, password: 'OtraMasLarga2026' } });
+    assert(r.status() === 410, `Respondió ${r.status()}`);
+  });
+  await test('la contraseña anterior deja de funcionar y la nueva exige 2FA', async () => {
+    const c = await browser.newContext();
+    const old = await c.request.post(`${BASE}/api/admin/login`, { headers: H, data: { email: ADMIN.email, password: ADMIN.pass } });
+    assert(old.status() === 401, `La contraseña anterior respondió ${old.status()}`);
+    const f = await c.newPage();
+    await f.goto(BASE + '/admin/acceso');
+    await f.fill('[name=email]', ADMIN.email); await f.fill('[name=password]', NEW_PASS);
+    await f.click('button[type=submit]');
+    await f.waitForSelector('text=Verificación en dos pasos');
+    usedCode = await freshTotp(secret);
+    await fillCode(f, usedCode);
+    await f.click('text=Entrar al panel');
+    await f.waitForSelector('text=Analítica del registro');
+  });
+  await test('un código TOTP ya usado no se acepta otra vez', async () => {
+    const c = await browser.newContext();
+    await c.request.post(`${BASE}/api/admin/login`, { headers: H, data: { email: ADMIN.email, password: NEW_PASS } });
+    const r = await c.request.post(`${BASE}/api/admin/2fa/verify`, { headers: H, data: { code: usedCode } });
+    assert(r.status() === 422, `El código reutilizado respondió ${r.status()}`);
+  });
+
+  section('8. Diseño adaptable');
   await test('la página pública no se desborda en un celular', async () => {
     const m = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage();
     await m.goto(BASE + '/');

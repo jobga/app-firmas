@@ -40,7 +40,8 @@ export function Receipt() {
         )}
         <p className="xsmall muted">La huella digital permite comprobar que el registro no fue alterado después de la verificación del código enviado al correo del firmante.</p>
         <div className="btn-row rcpt__actions">
-          <button type="button" className="btn btn--primary" onClick={() => window.print()}>Guardar como PDF o imprimir</button>
+          <a className="btn btn--primary" href={`/api/receipts/${encodeURIComponent(token)}/pdf`} download>Descargar PDF</a>
+          <button type="button" className="btn btn--outline" onClick={() => window.print()}>Imprimir</button>
         </div>
       </article>
     </div>

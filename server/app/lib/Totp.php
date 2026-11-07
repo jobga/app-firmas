@@ -24,16 +24,21 @@ final class Totp
         return str_pad((string)($bin % 1000000), 6, '0', STR_PAD_LEFT);
     }
 
-    /** Acepta ±1 intervalo de 30 s para tolerar desfases de reloj. */
-    public static function verify(string $secret, string $code): bool
+    /**
+     * Acepta ±1 intervalo de 30 s para tolerar desfases de reloj.
+     * Devuelve el contador del intervalo aceptado, o null. Con $lastCounter rechaza códigos ya usados.
+     */
+    public static function verify(string $secret, string $code, ?int $lastCounter = null): ?int
     {
         $code = preg_replace('/\D/', '', $code);
-        if (strlen($code) !== 6) return false;
+        if (strlen($code) !== 6) return null;
         $t = intdiv(time(), 30);
         foreach ([-1, 0, 1] as $d) {
-            if (hash_equals(self::code($secret, $t + $d), $code)) return true;
+            $counter = $t + $d;
+            if ($lastCounter !== null && $counter <= $lastCounter) continue;
+            if (hash_equals(self::code($secret, $counter), $code)) return $counter;
         }
-        return false;
+        return null;
     }
 
     public static function base32Encode(string $data): string

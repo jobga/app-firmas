@@ -1,0 +1,91 @@
+# Pruebas de extremo a extremo en cada push y pull request, con PHP 8.1 (versión mínima) y MariaDB.
+# Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Instalación y pruebas de extremo a extremo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: animalista
+          MARIADB_USER: animalista
+          MARIADB_PASSWORD: Firmas2026
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: pdo_mysql, mbstring, fileinfo, openssl, gd
+          tools: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Revisar tipos (TypeScript)
+        run: npm run typecheck
+
+      - name: Revisar sintaxis PHP
+        run: find server scripts -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Generar el paquete para Plesk
+        run: npm run package
+
+      - name: Instalar Playwright y Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Servir el paquete con PHP
+        run: |
+          PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8080 -t release/animalista-firmas scripts/dev-router.php > php-server.log 2>&1 &
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:8080/api/status && break; sleep 1; done
+
+      - name: Pruebas de extremo a extremo
+        env:
+          BASE_URL: http://127.0.0.1:8080
+          DB_HOST: 127.0.0.1
+          DB_NAME: animalista
+          DB_USER: animalista
+          DB_PASS: Firmas2026
+        run: npm run test:e2e
+
+      - name: Guardar capturas y registro del servidor
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-pruebas
+          path: |
+            test-results/
+            php-server.log
+          if-no-files-found: ignore
+
+      - name: Guardar el ZIP para Plesk
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: animalista-firmas-zip
+          path: release/*.zip

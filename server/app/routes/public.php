@@ -65,6 +65,70 @@ function send_code(array $s, array $e): void
     }
 }
 
+const CAT_PATH = 'M20 186 L100 186 C108 186 110 178 104 176 C96 160 92 130 96 112 C84 108 74 96 74 82 C74 70 76 60 80 52 L84 34 L98 50 C104 48 112 48 118 50 L132 36 L132 56 C138 68 136 86 126 96 C140 104 156 124 158 150 C160 170 150 184 132 186 C160 188 186 180 188 160 C190 144 176 138 170 146';
+
+/** Convierte la firma (PNG con transparencia) a JPEG sobre fondo blanco para el PDF. Requiere GD. */
+function signature_jpeg(?string $dataUrl): ?string
+{
+    if (!$dataUrl || !function_exists('imagecreatefromstring')) return null;
+    $png = base64_decode((string)substr($dataUrl, strpos($dataUrl, ',') + 1), true);
+    $src = $png ? @imagecreatefromstring($png) : false;
+    if (!$src) return null;
+    $w = imagesx($src); $h = imagesy($src);
+    $dst = imagecreatetruecolor($w, $h);
+    imagefill($dst, 0, 0, imagecolorallocate($dst, 255, 255, 255));
+    imagecopy($dst, $src, 0, 0, 0, 0, $w, $h);
+    ob_start();
+    imagejpeg($dst, null, 90);
+    return ob_get_clean() ?: null;
+}
+
+/** Comprobante en PDF (A4). */
+function receipt_pdf(array $s, array $e): string
+{
+    $r = receipt_data($s, $e);
+    $tz = app_config()['timezone'] ?? 'America/Bogota';
+    $when = (new DateTime($s['verified_at'] . ' UTC'))->setTimezone(new DateTimeZone($tz))->format('d/m/Y H:i:s') . " ({$tz})";
+    $pdf = new Pdf('Comprobante ' . $r['folio'], APP_AUTHOR);
+    $x = 56; $w = Pdf::W - 2 * $x;
+
+    $pdf->svgPath(CAT_PATH, $x - 4, 48, 0.24, '#161616', 2.2);
+    $pdf->text($x + 60, 66, 'COMPROBANTE DE FIRMA VERIFICADA', 9, 'bold', '#2C4BFF');
+    $y = $pdf->paragraph($x + 60, 88, $w - 60, $r['eventName'], 18, 'bold', '#161616', 1.25);
+    if ($r['organization']) $y = $pdf->paragraph($x + 60, $y + 2, $w - 60, $r['organization'], 11, 'regular', '#6B6860');
+    $y = max($y, 120) + 12;
+    $pdf->line($x, $y, $x + $w, $y);
+    $y += 30;
+
+    $rows = [['Folio', $r['folio'], 'mono'], ['Firmante', $r['signer'], 'regular'], ['Documento', $r['document'], 'regular'], ['Verificada', $when, 'regular']];
+    foreach ($rows as [$label, $value, $font]) {
+        $pdf->text($x, $y, $label, 11, 'bold', '#161616');
+        $pdf->text($x + 130, $y, (string)$value, 11, $font);
+        $y += 24;
+    }
+    $pdf->text($x, $y, 'Huella SHA-256', 11, 'bold', '#161616');
+    $pdf->text($x + 130, $y, substr((string)$r['hash'], 0, 32), 10, 'mono');
+    $pdf->text($x + 130, $y + 14, substr((string)$r['hash'], 32), 10, 'mono');
+    $y += 44;
+
+    $boxH = 190;
+    $pdf->rect($x, $y, $w, $boxH, '#FFFFFF', '#B9B6AD', [4, 3]);
+    $jpg = signature_jpeg($s['signature_png']);
+    if ($jpg) $pdf->jpeg($jpg, $x + 20, $y + 14, $w - 40, $boxH - 44);
+    else $pdf->text($x + 20, $y + $boxH / 2, 'La imagen de la firma está guardada en el sistema.', 10, 'regular', '#6B6860');
+    $label = 'Firma registrada';
+    $pdf->text($x + ($w - Pdf::width($label, 9)) / 2, $y + $boxH - 12, $label, 9, 'regular', '#6B6860');
+    $y += $boxH + 28;
+
+    $y = $pdf->paragraph($x, $y, $w, 'La huella digital (SHA-256) se calculó al verificar el código enviado al correo del firmante e incluye sus datos y la imagen de la firma. Permite comprobar que el registro no fue alterado después de la verificación. El registro original se conserva en la plataforma del evento.', 9.5, 'regular', '#6B6860');
+
+    $pdf->line($x, Pdf::H - 64, $x + $w, Pdf::H - 64);
+    $pdf->text($x, Pdf::H - 46, 'Animalista · Plataforma de firmas', 8.5, 'bold', '#3D3B36');
+    $gen = 'Generado el ' . (new DateTime('now', new DateTimeZone($tz)))->format('d/m/Y H:i');
+    $pdf->text($x + $w - Pdf::width($gen, 8.5), Pdf::H - 46, $gen, 8.5, 'regular', '#6B6860');
+    return $pdf->output();
+}
+
 function receipt_data(array $s, array $e): array
 {
     return [
@@ -219,14 +283,27 @@ return [
                 . "<h2 style=\"color:#161616\">¡Gracias! Tu firma quedó registrada</h2>"
                 . "<p>Evento: <strong>{$ev}</strong></p><p>Folio: <strong>{$folio}</strong><br>Verificada: " . date('Y-m-d H:i', strtotime($verifiedAt . ' UTC')) . "</p>"
                 . "<p style=\"font-family:monospace;font-size:12px;word-break:break-all\">Huella (SHA-256): {$hash}</p>"
-                . "<p><a href=\"{$url}\">Ver y descargar el comprobante</a></p></div>";
+                . "<p>Adjuntamos el comprobante en PDF. También puedes <a href=\"{$url}\">verlo en línea</a>.</p></div>";
             try {
-                Mailer::fromSettings()->send($s['email'], 'Comprobante de tu firma · ' . $folio, $html, "Folio: {$folio}\nHuella: {$hash}\nComprobante: {$url}");
+                Mailer::fromSettings()->send($s['email'], 'Comprobante de tu firma · ' . $folio, $html, "Folio: {$folio}\nHuella: {$hash}\nComprobante: {$url}",
+                    [['name' => "comprobante-{$folio}.pdf", 'mime' => 'application/pdf', 'data' => receipt_pdf($s, $e)]]);
             } catch (Throwable $err) {
                 error_log('[animalista] comprobante: ' . $err->getMessage());
             }
         }
         return receipt_data($s, $e) + ['token' => $s['token']];
+    }],
+
+    ['GET', '/receipts/{token}/pdf', function ($p) {
+        $s = find_signature($p['token']);
+        if ($s['status'] !== 'verified') throw new HttpError(404, 'Comprobante no disponible');
+        $pdf = receipt_pdf($s, signature_event($s));
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="comprobante-' . $s['folio'] . '.pdf"');
+        header('Content-Length: ' . strlen($pdf));
+        header('Cache-Control: private, no-store');
+        echo $pdf;
+        exit;
     }],
 
     ['GET', '/receipts/{token}', function ($p) {

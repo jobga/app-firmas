@@ -87,9 +87,10 @@ return [
         $a = Auth::pending();
         if ($a['totp_enabled']) throw new HttpError(409, 'La verificación en dos pasos ya está activa');
         Http::rateLimit('mfa:' . $a['id'], 10, 600);
-        if (!Totp::verify((string)$a['totp_secret'], (string)(Http::body()['code'] ?? ''))) throw new HttpError(422, 'Código incorrecto. Revisa la hora de tu teléfono e inténtalo de nuevo.');
+        $counter = Totp::verify((string)$a['totp_secret'], (string)(Http::body()['code'] ?? ''));
+        if ($counter === null) throw new HttpError(422, 'Código incorrecto. Revisa la hora de tu teléfono e inténtalo de nuevo.');
         $codes = Auth::recoveryCodes();
-        Db::update('admins', ['totp_enabled' => 1, 'recovery_codes' => json_encode($codes['hashed'])], 'id = ?', [$a['id']]);
+        Db::update('admins', ['totp_enabled' => 1, 'totp_last_counter' => $counter, 'recovery_codes' => json_encode($codes['hashed'])], 'id = ?', [$a['id']]);
         Auth::complete((int)$a['id']);
         return ['ok' => true, 'recoveryCodes' => $codes['plain']];
     }],
@@ -112,8 +113,51 @@ return [
             }
             throw new HttpError(422, 'Código de recuperación no válido');
         }
-        if (!Totp::verify((string)$a['totp_secret'], (string)($b['code'] ?? ''))) throw new HttpError(422, 'Código incorrecto');
+        $last = $a['totp_last_counter'] !== null ? (int)$a['totp_last_counter'] : null;
+        $counter = Totp::verify((string)$a['totp_secret'], (string)($b['code'] ?? ''), $last);
+        if ($counter === null) throw new HttpError(422, 'Código incorrecto o ya usado. Espera el siguiente código de la app.');
+        Db::update('admins', ['totp_last_counter' => $counter], 'id = ?', [$a['id']]);
         Auth::complete((int)$a['id']);
+        return ['ok' => true];
+    }],
+
+    // ---------- Recuperación de contraseña ----------
+    // Responde igual exista o no la cuenta, para no revelar qué correos son administradores.
+    ['POST', '/admin/password/forgot', function () {
+        Http::rateLimit('forgot:' . Http::ip(), 5, 3600);
+        $email = strtolower((string)Http::str(Http::body(), 'email', 190, true));
+        $a = Db::one('SELECT id, name, email, reset_expires_at FROM `#__admins` WHERE email = ?', [$email]);
+        $recent = $a && $a['reset_expires_at'] && strtotime($a['reset_expires_at'] . ' UTC') > time() + 55 * 60;
+        if ($a && !$recent) {
+            $token = bin2hex(random_bytes(32));
+            Db::update('admins', ['reset_token_hash' => hash('sha256', $token), 'reset_expires_at' => gmdate('Y-m-d H:i:s', time() + 3600)], 'id = ?', [$a['id']]);
+            $url = Util::baseUrl() . '/admin/restablecer/' . $token;
+            $site = Db::setting('site_name', 'Animalista');
+            $html = '<div style="font-family:Arial,sans-serif;color:#3D3B36;max-width:480px"><p>Hola ' . Util::e($a['name']) . ',</p>'
+                . '<p>Recibimos una solicitud para restablecer tu contraseña en <strong>' . Util::e($site) . '</strong>.</p>'
+                . '<p><a href="' . Util::e($url) . '" style="display:inline-block;background:#2C4BFF;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none">Crear una contraseña nueva</a></p>'
+                . '<p>El enlace vence en 1 hora y sirve una sola vez. Después seguirás necesitando tu app autenticadora para entrar. Si no lo solicitaste, ignora este correo.</p></div>';
+            try {
+                Mailer::fromSettings()->send($a['email'], 'Restablecer contraseña · ' . $site, $html, "Para crear una contraseña nueva abre: {$url}\nEl enlace vence en 1 hora.");
+            } catch (RuntimeException $e) {
+                error_log('[animalista] recuperación: ' . $e->getMessage());
+            }
+        }
+        return ['ok' => true];
+    }],
+
+    ['POST', '/admin/password/reset', function () {
+        Http::rateLimit('reset:' . Http::ip(), 10, 3600);
+        $b = Http::body();
+        $token = (string)($b['token'] ?? '');
+        $a = preg_match('/^[a-f0-9]{64}$/', $token) ? Db::one('SELECT id, reset_expires_at FROM `#__admins` WHERE reset_token_hash = ?', [hash('sha256', $token)]) : null;
+        if (!$a || strtotime($a['reset_expires_at'] . ' UTC') < time()) throw new HttpError(410, 'El enlace no es válido o ya venció. Solicita uno nuevo.');
+        $new = (string)($b['password'] ?? '');
+        if (strlen($new) < 10) throw new HttpError(422, 'La nueva contraseña debe tener al menos 10 caracteres', ['field' => 'password']);
+        Db::update('admins', [
+            'password_hash' => password_hash($new, PASSWORD_DEFAULT), 'reset_token_hash' => null, 'reset_expires_at' => null,
+            'failed_attempts' => 0, 'locked_until' => null,
+        ], 'id = ?', [$a['id']]);
         return ['ok' => true];
     }],
 
@@ -406,14 +450,16 @@ return [
         if (!password_verify((string)($b['current'] ?? ''), $row['password_hash'])) throw new HttpError(422, 'La contraseña actual no es correcta', ['field' => 'current']);
         $new = (string)($b['new'] ?? '');
         if (strlen($new) < 10) throw new HttpError(422, 'La nueva contraseña debe tener al menos 10 caracteres', ['field' => 'new']);
-        Db::update('admins', ['password_hash' => password_hash($new, PASSWORD_DEFAULT)], 'id = ?', [$a['id']]);
+        Db::update('admins', ['password_hash' => password_hash($new, PASSWORD_DEFAULT), 'reset_token_hash' => null, 'reset_expires_at' => null], 'id = ?', [$a['id']]);
         return ['ok' => true];
     }],
 
     ['POST', '/admin/2fa/recovery-codes', function () {
         $a = Auth::admin();
-        $row = Db::one('SELECT totp_secret FROM `#__admins` WHERE id = ?', [$a['id']]);
-        if (!Totp::verify((string)$row['totp_secret'], (string)(Http::body()['code'] ?? ''))) throw new HttpError(422, 'Código de la app incorrecto', ['field' => 'code']);
+        $row = Db::one('SELECT totp_secret, totp_last_counter FROM `#__admins` WHERE id = ?', [$a['id']]);
+        $counter = Totp::verify((string)$row['totp_secret'], (string)(Http::body()['code'] ?? ''), $row['totp_last_counter'] !== null ? (int)$row['totp_last_counter'] : null);
+        if ($counter === null) throw new HttpError(422, 'Código de la app incorrecto o ya usado', ['field' => 'code']);
+        Db::update('admins', ['totp_last_counter' => $counter], 'id = ?', [$a['id']]);
         $codes = Auth::recoveryCodes();
         Db::update('admins', ['recovery_codes' => json_encode($codes['hashed'])], 'id = ?', [$a['id']]);
         return ['recoveryCodes' => $codes['plain']];

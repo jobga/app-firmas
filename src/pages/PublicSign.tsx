@@ -320,9 +320,10 @@ function SignFlow({ event }: { event: PublicEvent }) {
                     <span><strong>Verificada:</strong> {fmtDateTime(receipt.verifiedAt)}</span>
                   </div>
                   <div className="btn-row btn-row--center">
-                    <Link to={`/comprobante/${receipt.token ?? token}`} className="btn btn--primary">Descargar comprobante</Link>
+                    <a href={`/api/receipts/${receipt.token ?? token}/pdf`} className="btn btn--primary" download>Descargar comprobante</a>
                     <button type="button" className="btn btn--outline" onClick={share}>Compartir convocatoria</button>
                   </div>
+                  <Link to={`/comprobante/${receipt.token ?? token}`} className="small">Ver comprobante en línea</Link>
                 </div>
               )}
             </>

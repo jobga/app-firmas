@@ -149,6 +149,7 @@ function install(string $root, string $configFile, array $D): void
     Db::setSetting('site_url', $D['site']['url'] ?: null);
     Db::setSetting('mail', json_encode($D['mail'] ?? []));
     Db::setSetting('installed_version', APP_VERSION);
+    Db::setSetting('db_version', (string)DB_VERSION);
     Db::setSetting('author', APP_AUTHOR);
     Db::insert('admins', ['name' => $D['site']['admin_name'], 'email' => $D['site']['admin_email'], 'password_hash' => $D['admin_hash'], 'created_at' => $now]);
     if ($D['site']['sample']) {

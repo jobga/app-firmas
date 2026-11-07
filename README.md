@@ -9,14 +9,15 @@ Plataforma web para recoger firmas verificadas por correo, con caracterización 
 | Ruta | Pantalla |
 | --- | --- |
 | `/` y `/firma/<enlace>` | Registro público: datos → firma dibujada → código de 6 dígitos por correo → comprobante |
-| `/comprobante/<token>` | Comprobante imprimible (folio, fecha, huella SHA-256 y firma) |
-| `/admin/acceso` | Acceso de administrador con contraseña y verificación en dos pasos (QR TOTP + códigos de recuperación) |
+| `/comprobante/<token>` | Comprobante en línea y en PDF (folio, fecha, huella SHA-256 y firma); el PDF también llega adjunto al correo |
+| `/admin/acceso` | Acceso de administrador con contraseña y verificación en dos pasos (QR TOTP + códigos de recuperación), y «¿Olvidaste tu contraseña?» por correo |
+| `/admin/restablecer/<token>` | Crear una contraseña nueva desde el enlace del correo (vence en 1 hora, un solo uso) |
 | `/admin` | Analítica: indicadores, registros por día, embudo, caracterización y últimos registros |
 | `/admin/eventos` | Lista y configuración de eventos con vista previa en vivo, logo, fondo, colores, campos y QR del enlace |
 | `/admin/ajustes` | Plataforma, correo SMTP, contraseña, códigos de recuperación y administradores |
 | `/install/` | Asistente de instalación |
 
-Seguridad: contraseñas con `password_hash`, 2FA obligatorio, bloqueo de 15 min tras 5 intentos, límites por IP, cookies `HttpOnly` + `SameSite=Strict`, cabecera anti-CSRF, carpetas `app/` y `config/` bloqueadas, `uploads/` sin ejecución de scripts, validación de imágenes y SVG, exportación CSV protegida contra inyección de fórmulas.
+Seguridad: contraseñas con `password_hash`, 2FA obligatorio (un código TOTP no se acepta dos veces), bloqueo de 15 min tras 5 intentos, límites por IP, cookies `HttpOnly` + `SameSite=Strict`, cabecera anti-CSRF, carpetas `app/` y `config/` bloqueadas, `uploads/` sin ejecución de scripts, validación de imágenes y SVG, exportación CSV protegida contra inyección de fórmulas.
 
 ## Requisitos del hosting
 
@@ -50,6 +51,15 @@ Seguridad: contraseñas con `password_hash`, 2FA obligatorio, bloqueo de 15 min 
 9. Entra a `/admin/acceso`, escanea el QR con Google Authenticator, Microsoft Authenticator o Authy y guarda los códigos de recuperación.
 10. En **Eventos**, edita el evento de ejemplo o crea uno nuevo y pulsa **Publicar evento**.
 
+## Actualizar una instalación
+
+1. Genera el paquete nuevo con `npm run package`, o descárgalo de la pestaña *Actions* de GitHub (artefacto `animalista-firmas-zip`).
+2. Haz una copia de seguridad de la base de datos (Plesk: *Bases de datos → Exportar copia*) y de `config/` y `uploads/`.
+3. Sube el ZIP a `httpdocs` y extráelo **sobrescribiendo** los archivos. `config/config.php` y `uploads/` no vienen en el paquete, así que se conservan.
+4. Elimina otra vez la carpeta `install/`.
+
+La primera petición después de actualizar aplica sola los cambios pendientes de la base de datos (`server/app/migrations.php`), como hace WordPress. Los datos se conservan.
+
 Para reinstalar: borra `config/config.php` (y las tablas, o usa otro prefijo) y vuelve a abrir `/install/`.
 
 ## Desarrollo local
@@ -76,13 +86,15 @@ sudo bash scripts/setup-local-server.sh
 
 En Windows o macOS puedes usar XAMPP o Laragon: copia el contenido de `release/animalista-firmas/` en la carpeta pública (`htdocs` o `www`), crea una base de datos en phpMyAdmin y abre el sitio en el navegador.
 
-La batería de pruebas de extremo a extremo instala la plataforma desde cero con el asistente y recorre el panel, la firma pública, la seguridad, la exportación y el diseño en celular (44 pruebas). Necesita una base de datos **vacía** y Playwright con Chromium. Levanta su propio SMTP de prueba en el puerto 2525 para leer los códigos.
+La batería de pruebas de extremo a extremo instala la plataforma desde cero con el asistente y recorre el panel, la firma pública, la seguridad, la exportación, la recuperación de contraseña y el diseño en celular (51 pruebas). Necesita una base de datos **vacía** y Playwright con Chromium. Levanta su propio SMTP de prueba en el puerto 2525 para leer los códigos.
 
 ```bash
 BASE_URL=http://localhost:8080 DB_NAME=animalista DB_USER=animalista DB_PASS='Firmas#2026' npm run test:e2e
 ```
 
 Las capturas quedan en `test-results/`.
+
+En GitHub, el flujo `.github/workflows/pruebas.yml` corre lo mismo en cada push y pull request con PHP 8.1 (la versión mínima) y MariaDB, y publica el ZIP listo para Plesk como artefacto.
 
 ## Estructura
 
@@ -96,4 +108,5 @@ server/uploads/      Logos e imágenes de fondo de los eventos
 scripts/package.mjs  Empaquetado para Plesk
 scripts/setup-local-server.sh  Servidor local Apache + PHP + MariaDB
 tests/e2e.mjs        Pruebas de extremo a extremo
+.github/workflows/   Integración continua
 ```

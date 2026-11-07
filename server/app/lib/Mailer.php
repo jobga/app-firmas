@@ -14,23 +14,39 @@ final class Mailer
         return new self($raw ? (json_decode($raw, true) ?: []) : []);
     }
 
-    public function send(string $to, string $subject, string $html, string $text): void
+    /** @param array<int, array{name: string, mime: string, data: string}> $attachments */
+    public function send(string $to, string $subject, string $html, string $text, array $attachments = []): void
     {
         $fromEmail = $this->cfg['from_email'] ?? ('no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
         $fromName = $this->cfg['from_name'] ?? 'Animalista';
-        $boundary = 'b' . bin2hex(random_bytes(12));
+        $alt = 'a' . bin2hex(random_bytes(12));
         $encSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+        $alternative = "--{$alt}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+            . chunk_split(base64_encode($text))
+            . "--{$alt}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+            . chunk_split(base64_encode($html))
+            . "--{$alt}--\r\n";
+
+        if ($attachments) {
+            $mixed = 'm' . bin2hex(random_bytes(12));
+            $contentType = "Content-Type: multipart/mixed; boundary=\"{$mixed}\"";
+            $body = "--{$mixed}\r\nContent-Type: multipart/alternative; boundary=\"{$alt}\"\r\n\r\n" . $alternative;
+            foreach ($attachments as $a) {
+                $name = preg_replace('/[^A-Za-z0-9._-]/', '_', $a['name']);
+                $body .= "--{$mixed}\r\nContent-Type: {$a['mime']}; name=\"{$name}\"\r\nContent-Transfer-Encoding: base64\r\n"
+                    . "Content-Disposition: attachment; filename=\"{$name}\"\r\n\r\n" . chunk_split(base64_encode($a['data']));
+            }
+            $body .= "--{$mixed}--\r\n";
+        } else {
+            $contentType = "Content-Type: multipart/alternative; boundary=\"{$alt}\"";
+            $body = $alternative;
+        }
         $headers = [
             'From: ' . '=?UTF-8?B?' . base64_encode($fromName) . "?= <{$fromEmail}>",
             'MIME-Version: 1.0',
-            "Content-Type: multipart/alternative; boundary=\"{$boundary}\"",
+            $contentType,
             'X-Mailer: Animalista Firmas',
         ];
-        $body = "--{$boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
-            . chunk_split(base64_encode($text))
-            . "--{$boundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
-            . chunk_split(base64_encode($html))
-            . "--{$boundary}--\r\n";
 
         if (empty($this->cfg['host'])) {
             if (!@mail($to, $encSubject, $body, implode("\r\n", $headers), '-f' . $fromEmail)) {
