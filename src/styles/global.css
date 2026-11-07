@@ -1,3 +1,4 @@
+/* Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo */
 /* Design tokens — Animalista */
 :root {
   --ink: #161616;
@@ -150,3 +151,13 @@ textarea.field { resize: vertical; line-height: 1.5; }
   .draw path { animation: none; stroke-dashoffset: 0; }
   .rise { animation: none; }
 }
+
+/* ---------- Estados ---------- */
+.page-loading { min-height: 60vh; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
+.alert { border-radius: 14px; padding: 12px 16px; font-size: 14px; line-height: 1.5; }
+.alert--error { background: #fbe4de; color: #7a2412; }
+.alert--ok { background: var(--ok-bg); color: var(--ok-fg); }
+.alert--warn { background: var(--note-bg); color: var(--note-fg); }
+.btn:disabled { opacity: 0.6; cursor: progress; }
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.line-field { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }

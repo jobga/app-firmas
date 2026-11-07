@@ -1,3 +1,4 @@
+/* Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo */
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 export type SignaturePadHandle = { clear: () => void; toDataURL: () => string | null };

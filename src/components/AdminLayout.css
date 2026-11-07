@@ -1,3 +1,4 @@
+/* Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo */
 .admin { min-height: 100vh; background: var(--ground); color: var(--text); display: flex; flex-wrap: wrap; }
 .admin__side {
   flex: 1 1 240px; max-width: 100%; background: var(--ink); padding: 24px 16px;
@@ -11,7 +12,8 @@
   border-radius: 12px; color: var(--on-dark); text-decoration: none; font-size: 14px;
 }
 .admin__nav a:hover, .admin__nav a.is-active { background: var(--ink-2); color: #fff; }
-.admin__user { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: var(--ink-3); }
+.admin__foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+.admin__user { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: var(--ink-3); }
 .admin__avatar {
   width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: #fff;
   display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; flex: none;
@@ -26,3 +28,7 @@
 .admin-header__titles { display: flex; flex-direction: column; gap: 6px; }
 .admin-title { font-family: var(--font-display); font-weight: 300; font-size: clamp(26px, 3vw, 36px); color: var(--ink); }
 .admin-header__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.admin__logout { margin-left: auto; width: 44px; height: 44px; flex: none; border: 0; border-radius: 10px; background: transparent; color: var(--on-dark); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.admin__logout:hover { background: var(--ink-2); color: #fff; }
+.admin__credit { font-size: 11px; color: var(--muted-dark); padding: 0 8px; }
+.admin-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 48px 16px; }

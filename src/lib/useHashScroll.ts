@@ -1,3 +1,4 @@
+/* Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo */
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 

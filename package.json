@@ -1,24 +1,36 @@
 {
   "name": "app-firmas",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:php": "php -S 127.0.0.1:8000 -t server scripts/dev-router.php",
     "build": "tsc -b && vite build",
+    "package": "npm run build && node scripts/package.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.9.0"
+    "react-router-dom": "^7.9.0",
+    "three": "^0.181.2"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@types/three": "^0.181.0",
     "@vitejs/plugin-react": "^5.1.0",
     "typescript": "~5.9.3",
     "vite": "^7.2.0"
-  }
+  },
+  "description": "Plataforma de recolección de firmas verificadas con analítica y asistente de instalación para Plesk.",
+  "author": "Jonnathan Bucheli Galindo",
+  "contributors": [
+    "Jonnathan Bucheli Galindo"
+  ],
+  "license": "UNLICENSED"
 }

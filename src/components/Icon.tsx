@@ -1,3 +1,4 @@
+/* Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo */
 import type { ReactNode } from 'react';
 
 const paths: Record<string, ReactNode> = {

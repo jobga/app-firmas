@@ -1,0 +1,31 @@
+# Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo
+Options -Indexes
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Carpetas internas nunca accesibles desde la web
+  RewriteRule ^(app|config)(/|$) - [F,L]
+
+  # API
+  RewriteRule ^api(/.*)?$ api/index.php [QSA,L]
+
+  # Archivos y carpetas existentes (assets, uploads, install)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Aplicación de una sola página
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  <FilesMatch "index\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

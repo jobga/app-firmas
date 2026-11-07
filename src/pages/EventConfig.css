@@ -1,3 +1,4 @@
+/* Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo */
 .ev-layout { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
 .ev-form { flex: 3 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
 .ev-side { flex: 2 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 12px; position: sticky; top: 24px; }
@@ -32,3 +33,17 @@
 
 .link-box { flex: 1 1 200px; font: 13px var(--font-mono); background: var(--surface-2); border-radius: 10px; padding: 12px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn--tiny { min-height: 44px; padding: 0 14px; border-radius: 10px; font-size: 13px; }
+.drop-wrap { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.drop-wrap .drop { width: 100%; }
+.drop__img { max-width: 160px; max-height: 64px; object-fit: contain; }
+.slug-field { display: flex; align-items: center; gap: 8px; }
+.custom-fields { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.custom-fields li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.custom-fields .field { flex: 1 1 220px; width: auto; }
+.danger { border-color: #f1c9bf; }
+.danger__btn { color: var(--bad-fg); border-color: #e6b3a6; align-self: flex-start; }
+.qr-share { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 8px; }
+.qr-share__img { width: 180px; height: 180px; padding: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.about { margin: 0; display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px 12px; font-size: 14px; }
+.about dt { font-weight: 600; color: var(--ink); }
+.about dd { margin: 0; }

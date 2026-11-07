@@ -1,3 +1,4 @@
+/* Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo */
 import type { SVGProps } from 'react';
 
 /** One-stroke cat outline (viewBox 0 0 200 200). */
