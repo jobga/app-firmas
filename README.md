@@ -66,6 +66,24 @@ npm run dev
 
 `dev:php` levanta la API PHP en `127.0.0.1:8000` y Vite le pasa `/api`, `/install` y `/uploads`. Necesitas una base de datos MySQL/MariaDB local; abre `http://localhost:5173/install/` la primera vez.
 
+## Servidor local y pruebas
+
+Para montar en Ubuntu/Debian un servidor parecido a Plesk (Apache con `.htaccess`, PHP y MariaDB) y desplegar la plataforma en `http://localhost:8080`:
+
+```bash
+sudo bash scripts/setup-local-server.sh
+```
+
+En Windows o macOS puedes usar XAMPP o Laragon: copia el contenido de `release/animalista-firmas/` en la carpeta pública (`htdocs` o `www`), crea una base de datos en phpMyAdmin y abre el sitio en el navegador.
+
+La batería de pruebas de extremo a extremo instala la plataforma desde cero con el asistente y recorre el panel, la firma pública, la seguridad, la exportación y el diseño en celular (44 pruebas). Necesita una base de datos **vacía** y Playwright con Chromium. Levanta su propio SMTP de prueba en el puerto 2525 para leer los códigos.
+
+```bash
+BASE_URL=http://localhost:8080 DB_NAME=animalista DB_USER=animalista DB_PASS='Firmas#2026' npm run test:e2e
+```
+
+Las capturas quedan en `test-results/`.
+
 ## Estructura
 
 ```
@@ -76,4 +94,6 @@ server/install/      Asistente de instalación
 server/config/       config.php generado por el instalador (no se versiona)
 server/uploads/      Logos e imágenes de fondo de los eventos
 scripts/package.mjs  Empaquetado para Plesk
+scripts/setup-local-server.sh  Servidor local Apache + PHP + MariaDB
+tests/e2e.mjs        Pruebas de extremo a extremo
 ```

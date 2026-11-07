@@ -61,9 +61,9 @@
 
 .table-card { padding: 0; gap: 0; }
 .table-head { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; padding: 20px; }
-.search { flex: 0 1 280px; }
+.search { position: relative; flex: 0 1 280px; }
 .search input { width: 100%; font: inherit; font-size: 14px; border: 1px solid var(--line-input); border-radius: 12px; padding: 0 12px; min-height: 44px; }
-.table-scroll { overflow-x: auto; }
+.table-scroll { position: relative; overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { text-align: left; padding: 12px 14px; white-space: nowrap; }
 .table th { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--line); }

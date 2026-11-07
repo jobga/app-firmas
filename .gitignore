@@ -5,3 +5,4 @@ dist
 release
 server/config/config.php
 server/uploads/events
+test-results
