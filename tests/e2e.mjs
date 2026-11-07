@@ -288,6 +288,13 @@ async function main() {
     await pub.fill('[name=phone]', '3001234567'); await pub.fill('[name=birthDate]', '1990-05-01');
     await pub.selectOption('[name=gender]', 'Femenino'); await pub.selectOption('[name=municipality]', 'Pasto');
     await pub.selectOption('[name=ethnicGroup]', 'Campesino'); await pub.fill('input[name^=custom_]', 'Centro');
+    await pub.check('[name=pets][value=Perros]'); await pub.check('[name=pets][value=Otros]');
+    // «Ninguno» es excluyente: desmarca y deshabilita las demás; al quitarlo se vuelven a habilitar.
+    await pub.check('[name=pets][value=Ninguno]');
+    assert(!(await pub.isChecked('[name=pets][value=Perros]')) && !(await pub.isChecked('[name=pets][value=Otros]')), '«Ninguno» no desmarcó las demás');
+    assert(await pub.isDisabled('[name=pets][value=Gatos]'), '«Ninguno» no deshabilitó las demás');
+    await pub.uncheck('[name=pets][value=Ninguno]');
+    assert(await pub.isEnabled('[name=pets][value=Gatos]'), 'al quitar «Ninguno» no se habilitaron las demás');
     await pub.check('[name=pets][value=Perros]'); await pub.check('[name=pets][value=Gatos]'); await pub.check('[name=consentData]');
     await pub.click('text=Continuar a la firma');
     await pub.waitForSelector('text=Dibuja tu firma');
@@ -357,7 +364,7 @@ async function main() {
     const ev = await (await pubCtx.request.get(`${BASE}/api/events/${eventSlug}`)).json();
     const custom = { [ev.fields.custom[0].id]: 'Obrero' };
     const r = await pubCtx.request.post(`${BASE}/api/events/${eventSlug}/signatures`, {
-      headers: H, data: { fullName: '=HYPERLINK("http://malo")', docType: 'Pasaporte', docNumber: 'AB123456', email: 'pedro@example.com', birthDate: '1970-03-03', gender: 'Masculino', municipality: 'Ipiales', zone: 'Rural', ethnicGroup: 'Indígena', pets: ['Ninguno'], consentData: true, custom },
+      headers: H, data: { fullName: '=HYPERLINK("http://malo")', docType: 'Pasaporte', docNumber: 'AB123456', email: 'pedro@example.com', birthDate: '1970-03-03', gender: 'Masculino', municipality: 'Ipiales', zone: 'Rural', ethnicGroup: 'Indígena', pets: ['Ninguno', 'Gatos'], consentData: true, custom },
     });
     const { token } = await r.json();
     assert((await pubCtx.request.post(`${BASE}/api/signatures/${token}/sign`, { headers: H, data: { image: PNG } })).ok(), 'No se guardó la firma');

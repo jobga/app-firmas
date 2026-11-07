@@ -22,6 +22,7 @@ const GENDERS = ['Femenino', 'Masculino', 'No binario', 'Prefiero no decir'];
 const ETHNIC = ['Ninguno', 'Indígena', 'Afrocolombiano', 'Raizal', 'Palenquero', 'Rrom', 'Campesino'];
 const EDUCATION = ['Primaria', 'Secundaria', 'Técnico o tecnólogo', 'Universitario', 'Posgrado', 'Ninguno'];
 const PETS = ['Perros', 'Gatos', 'Otros', 'Ninguno'];
+const NO_PETS = 'Ninguno';
 
 function maskEmail(email: string) {
   const at = email.indexOf('@');
@@ -66,6 +67,10 @@ function SignFlow({ event }: { event: PublicEvent }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pets, setPets] = useState<string[]>([]);
+  // «Ninguno» es excluyente: al marcarlo se desmarcan y deshabilitan las demás opciones.
+  const togglePet = (a: string, on: boolean) =>
+    setPets((prev) => (a === NO_PETS ? (on ? [NO_PETS] : []) : on ? [...prev.filter((x) => x !== NO_PETS), a] : prev.filter((x) => x !== a)));
   const sigRef = useRef<SignaturePadHandle>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -248,7 +253,14 @@ function SignFlow({ event }: { event: PublicEvent }) {
                     <fieldset className="fieldset">
                       <legend>¿Convives con animales?</legend>
                       <div className="chips">
-                        {PETS.map((a) => <label key={a} className="chip"><input type="checkbox" name="pets" value={a} /> {a}</label>)}
+                        {PETS.map((a) => {
+                          const disabled = a !== NO_PETS && pets.includes(NO_PETS);
+                          return (
+                            <label key={a} className={'chip' + (disabled ? ' is-disabled' : '')}>
+                              <input type="checkbox" name="pets" value={a} checked={pets.includes(a)} disabled={disabled} onChange={(e) => togglePet(a, e.target.checked)} /> {a}
+                            </label>
+                          );
+                        })}
                       </div>
                     </fieldset>
                   )}

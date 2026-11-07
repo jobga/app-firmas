@@ -84,7 +84,7 @@ final class Mailer
         $cmd = function (string $c, array $ok) use ($fp, $read): string {
             fwrite($fp, $c . "\r\n");
             [$code, $resp] = $read();
-            if (!in_array($code, $ok, true)) throw new RuntimeException('SMTP: ' . trim($resp));
+            if (!in_array($code, $ok, true)) throw new RuntimeException(self::explain(trim($resp)));
             return $resp;
         };
 
@@ -102,7 +102,10 @@ final class Mailer
         if (!empty($this->cfg['user'])) {
             $cmd('AUTH LOGIN', [334]);
             $cmd(base64_encode($this->cfg['user']), [334]);
-            $cmd(base64_encode((string)($this->cfg['pass'] ?? '')), [235]);
+            $pass = (string)($this->cfg['pass'] ?? '');
+            // Google muestra las contraseñas de aplicación en grupos de 4 («abcd efgh ijkl mnop»): se envían sin espacios.
+            if (preg_match('/(^|\.)(gmail|googlemail|google)\.com$/i', $host)) $pass = preg_replace('/\s+/', '', $pass);
+            $cmd(base64_encode($pass), [235]);
         }
         $cmd("MAIL FROM:<{$from}>", [250]);
         $cmd("RCPT TO:<{$to}>", [250, 251]);
@@ -112,5 +115,19 @@ final class Mailer
         $cmd($msg . "\r\n.", [250]);
         $cmd('QUIT', [221]);
         fclose($fp);
+    }
+
+    /** Traduce las respuestas SMTP más comunes a un mensaje claro en español. */
+    private static function explain(string $resp): string
+    {
+        $one = preg_replace('/\s+/', ' ', $resp);
+        if (str_contains($one, '5.7.9') || stripos($one, 'Application-specific password') !== false) {
+            return 'SMTP: Gmail exige una contraseña de aplicación. Activa la verificación en dos pasos en tu cuenta de Google, '
+                . 'crea una en myaccount.google.com/apppasswords y escribe esas 16 letras en «Contraseña» (no la contraseña normal). (' . $one . ')';
+        }
+        if (str_contains($one, '5.7.8') || str_starts_with($one, '535')) {
+            return 'SMTP: usuario o contraseña incorrectos. En Gmail usa el correo completo como usuario y una contraseña de aplicación. (' . $one . ')';
+        }
+        return 'SMTP: ' . $one;
     }
 }

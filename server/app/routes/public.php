@@ -194,6 +194,7 @@ return [
             $extra[$c['id']] = Http::str((array)($b['custom'] ?? []), $c['id'], 500, !empty($c['required']), $c['label']);
         }
         $pets = $opt['pets'] ? array_values(array_intersect((array)($b['pets'] ?? []), ['Perros', 'Gatos', 'Otros', 'Ninguno'])) : [];
+        if (in_array('Ninguno', $pets, true)) $pets = ['Ninguno']; // «Ninguno» excluye las demás opciones
         $ua = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
 
         $token = bin2hex(random_bytes(24));

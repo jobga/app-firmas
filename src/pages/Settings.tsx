@@ -99,6 +99,9 @@ export function Settings() {
 
           <Section title="Correo saliente (SMTP)" msg={mail.msg}>
             <p className="small muted">Se usa para enviar los códigos de verificación y los comprobantes. En Plesk usa un buzón de tu dominio: servidor <code>mail.tudominio.com</code>, puerto 465 (SSL) o 587 (STARTTLS). Si dejas el servidor vacío se usa la función mail() de PHP.</p>
+            {/(^|\.)(gmail|googlemail|google)\.com$/i.test(m.host.trim()) && (
+              <p className="small muted"><strong>Gmail:</strong> usuario = tu correo completo, puerto 587 (STARTTLS) o 465 (SSL). En «Contraseña» no sirve la de tu cuenta: activa la verificación en dos pasos y crea una <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer">contraseña de aplicación</a> (16 letras; los espacios se quitan solos). El remitente debe ser ese mismo correo.</p>
+            )}
             <div className="grid-fields">
               <label className="lbl">Servidor<input className="field" value={m.host} placeholder="mail.tudominio.com" onChange={(e) => setMail({ host: e.target.value })} /></label>
               <label className="lbl">Puerto<input className="field" type="number" value={m.port} onChange={(e) => setMail({ port: Number(e.target.value) })} /></label>
