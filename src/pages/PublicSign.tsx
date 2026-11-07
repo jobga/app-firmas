@@ -4,7 +4,8 @@
  */
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ApiError, fmtDate, fmtDateTime, fmtNumber, get, post, type PublicEvent, type Receipt } from '../lib/api';
+import { ApiError, fmtDate, fmtDateTime, fmtNumber, get, isExclusiveOption, post, type PublicEvent, type Receipt } from '../lib/api';
+import { loadGeo, type Department } from '../lib/geo';
 import { useAsync } from '../lib/useAsync';
 import { absoluteUrl, apiUrl } from '../lib/base';
 import { AnimalDrawing, CatAndDog, CatMark } from '../components/LineArt';
@@ -18,11 +19,27 @@ const LineField = lazy(() => import('../components/LineField'));
 
 const STEP_LABELS = ['Datos', 'Firma', 'Verificación', 'Listo'];
 const DOC_TYPES = ['Cédula de ciudadanía', 'Cédula de extranjería', 'PEP / PPT', 'Pasaporte'];
-const GENDERS = ['Femenino', 'Masculino', 'No binario', 'Prefiero no decir'];
-const ETHNIC = ['Ninguno', 'Indígena', 'Afrocolombiano', 'Raizal', 'Palenquero', 'Rrom', 'Campesino'];
-const EDUCATION = ['Primaria', 'Secundaria', 'Técnico o tecnólogo', 'Universitario', 'Posgrado', 'Ninguno'];
-const PETS = ['Perros', 'Gatos', 'Otros', 'Ninguno'];
-const NO_PETS = 'Ninguno';
+
+/** Casillas de opción múltiple; una opción «Ninguno» desmarca y deshabilita las demás. */
+function MultiChips({ name, options, value, onChange }: { name: string; options: string[]; value: string[]; onChange: (v: string[]) => void }) {
+  const exclusive = value.find(isExclusiveOption);
+  const toggle = (o: string, on: boolean) => {
+    if (isExclusiveOption(o)) return onChange(on ? [o] : []);
+    onChange(on ? [...value.filter((x) => !isExclusiveOption(x)), o] : value.filter((x) => x !== o));
+  };
+  return (
+    <div className="chips">
+      {options.map((o) => {
+        const disabled = !!exclusive && o !== exclusive;
+        return (
+          <label key={o} className={'chip' + (disabled ? ' is-disabled' : '')}>
+            <input type="checkbox" name={name} value={o} checked={value.includes(o)} disabled={disabled} onChange={(e) => toggle(o, e.target.checked)} /> {o}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
 
 function maskEmail(email: string) {
   const at = email.indexOf('@');
@@ -67,12 +84,24 @@ function SignFlow({ event }: { event: PublicEvent }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pets, setPets] = useState<string[]>([]);
-  // «Ninguno» es excluyente: al marcarlo se desmarcan y deshabilitan las demás opciones.
-  const togglePet = (a: string, on: boolean) =>
-    setPets((prev) => (a === NO_PETS ? (on ? [NO_PETS] : []) : on ? [...prev.filter((x) => x !== NO_PETS), a] : prev.filter((x) => x !== a)));
+  // Respuestas de opción múltiple: 'pets' y 'custom_<id>'.
+  const [multi, setMulti] = useState<Record<string, string[]>>({});
+  const setMultiValue = (k: string) => (v: string[]) => setMulti((m) => ({ ...m, [k]: v }));
+  const [geo, setGeo] = useState<Department[] | null>(null);
+  const [geoErr, setGeoErr] = useState(false);
+  const [department, setDepartment] = useState('');
   const sigRef = useRef<SignaturePadHandle>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const L = fields.lists;
+
+  useEffect(() => {
+    if (!opt.municipality) return;
+    loadGeo().then(setGeo).catch(() => setGeoErr(true));
+  }, [opt.municipality]);
+  const allowedDeps = geo ? (fields.geo.departments.length ? geo.filter((d) => fields.geo.departments.includes(d.code)) : geo) : [];
+  // Con un solo departamento permitido se selecciona solo.
+  useEffect(() => { if (allowedDeps.length === 1 && department !== allowedDeps[0].code) setDepartment(allowedDeps[0].code); }, [allowedDeps, department]);
+  const municipalities = allowedDeps.find((d) => d.code === department)?.municipalities ?? [];
 
   const policyHref = event.policyUrl || '#politica';
   const progress = event.goal ? Math.min(100, (event.verifiedCount / event.goal) * 100) : null;
@@ -90,13 +119,15 @@ function SignFlow({ event }: { event: PublicEvent }) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const s = (k: string) => (fd.get(k) as string | null) ?? '';
-    const custom: Record<string, string> = {};
-    fields.custom.forEach((c) => { if (c.id) custom[c.id] = s(`custom_${c.id}`); });
+    const custom: Record<string, string | string[]> = {};
+    fields.custom.forEach((c) => { if (c.id) custom[c.id] = c.type === 'multi' ? multi[`custom_${c.id}`] ?? [] : s(`custom_${c.id}`); });
+    const missingMulti = fields.custom.find((c) => c.type === 'multi' && c.required && !(multi[`custom_${c.id}`] ?? []).length);
+    if (missingMulti) { setErr(`Elige al menos una opción en «${missingMulti.label}».`); return; }
     run(async () => {
       const r = await post<{ token: string }>(`/events/${event.slug}/signatures`, {
         fullName: s('fullName'), docType: s('docType'), docNumber: s('docNumber'), email: s('email'), phone: s('phone'),
-        birthDate: s('birthDate'), gender: s('gender'), municipality: s('municipality'), zone: s('zone'), ethnicGroup: s('ethnicGroup'),
-        education: s('education'), disability: s('disability'), pets: fd.getAll('pets'),
+        birthDate: s('birthDate'), gender: s('gender'), department, municipality: s('municipality'), zone: s('zone'), ethnicGroup: s('ethnicGroup'),
+        education: s('education'), disability: s('disability'), pets: multi.pets ?? [],
         consentData: fd.get('consentData') === 'on', consentNews: fd.get('consentNews') === 'on', custom,
       });
       setToken(r.token);
@@ -211,32 +242,51 @@ function SignFlow({ event }: { event: PublicEvent }) {
                     {opt.birth_date && <label className="lbl">Fecha de nacimiento *<input className="field" name="birthDate" type="date" required max={new Date().toISOString().slice(0, 10)} /></label>}
                     {opt.gender && (
                       <label className="lbl">Género *
-                        <select className="field" name="gender" required defaultValue=""><option value="" disabled>Selecciona…</option>{GENDERS.map((g) => <option key={g}>{g}</option>)}</select>
+                        <select className="field" name="gender" required defaultValue=""><option value="" disabled>Selecciona…</option>{L.gender.map((g) => <option key={g}>{g}</option>)}</select>
                       </label>
                     )}
                     {opt.municipality && (
-                      <label className="lbl">Municipio *
-                        <select className="field" name="municipality" required defaultValue=""><option value="" disabled>Selecciona…</option>{event.municipalities.map((m) => <option key={m}>{m}</option>)}</select>
-                      </label>
+                      <>
+                        <label className="lbl">Departamento *
+                          <select className="field" name="department" required value={department} disabled={!geo || allowedDeps.length < 2}
+                            onChange={(e) => setDepartment(e.target.value)}>
+                            <option value="" disabled>{geo ? 'Selecciona…' : geoErr ? 'No se pudo cargar' : 'Cargando…'}</option>
+                            {allowedDeps.map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
+                          </select>
+                        </label>
+                        <label className="lbl">Municipio *
+                          <select key={department} className="field" name="municipality" required defaultValue="" disabled={!department}>
+                            <option value="" disabled>{department ? 'Selecciona…' : 'Primero elige el departamento'}</option>
+                            {municipalities.map((m) => <option key={m}>{m}</option>)}
+                          </select>
+                        </label>
+                      </>
                     )}
                     {opt.ethnic_group && (
                       <label className="lbl">Grupo étnico o poblacional
-                        <select className="field" name="ethnicGroup">{ETHNIC.map((g) => <option key={g}>{g}</option>)}</select>
+                        <select className="field" name="ethnicGroup">{L.ethnic_group.map((g) => <option key={g}>{g}</option>)}</select>
                       </label>
                     )}
                     {opt.education && (
                       <label className="lbl">Nivel educativo
-                        <select className="field" name="education" defaultValue=""><option value="">Prefiero no decir</option>{EDUCATION.map((g) => <option key={g}>{g}</option>)}</select>
+                        <select className="field" name="education" defaultValue=""><option value="">Prefiero no decir</option>{L.education.map((g) => <option key={g}>{g}</option>)}</select>
                       </label>
                     )}
                     {opt.disability && (
                       <label className="lbl">¿Tienes alguna discapacidad?
-                        <select className="field" name="disability" defaultValue=""><option value="">Prefiero no decir</option><option>No</option><option>Física</option><option>Visual</option><option>Auditiva</option><option>Cognitiva</option><option>Psicosocial</option><option>Múltiple</option></select>
+                        <select className="field" name="disability" defaultValue=""><option value="">Prefiero no decir</option>{L.disability.map((g) => <option key={g}>{g}</option>)}</select>
                       </label>
                     )}
-                    {fields.custom.map((c) => (
+                    {fields.custom.filter((c) => c.type !== 'multi').map((c) => (
                       <label key={c.id} className="lbl">{c.label}{c.required ? ' *' : ''}
-                        <input className="field" name={`custom_${c.id}`} type="text" required={c.required} maxLength={500} />
+                        {c.type === 'select' ? (
+                          <select className="field" name={`custom_${c.id}`} required={c.required} defaultValue="">
+                            <option value="" disabled={c.required}>{c.required ? 'Selecciona…' : 'Sin respuesta'}</option>
+                            {c.options.map((o) => <option key={o}>{o}</option>)}
+                          </select>
+                        ) : (
+                          <input className="field" name={`custom_${c.id}`} type="text" required={c.required} maxLength={500} />
+                        )}
                       </label>
                     ))}
                   </div>
@@ -244,26 +294,22 @@ function SignFlow({ event }: { event: PublicEvent }) {
                     <fieldset className="fieldset">
                       <legend>Zona de residencia *</legend>
                       <div className="chips">
-                        <label className="chip"><input type="radio" name="zone" value="Urbana" defaultChecked /> Urbana</label>
-                        <label className="chip"><input type="radio" name="zone" value="Rural" /> Rural</label>
+                        {L.zone.map((z, i) => <label key={z} className="chip"><input type="radio" name="zone" value={z} defaultChecked={i === 0} required /> {z}</label>)}
                       </div>
                     </fieldset>
                   )}
                   {opt.pets && (
                     <fieldset className="fieldset">
                       <legend>¿Convives con animales?</legend>
-                      <div className="chips">
-                        {PETS.map((a) => {
-                          const disabled = a !== NO_PETS && pets.includes(NO_PETS);
-                          return (
-                            <label key={a} className={'chip' + (disabled ? ' is-disabled' : '')}>
-                              <input type="checkbox" name="pets" value={a} checked={pets.includes(a)} disabled={disabled} onChange={(e) => togglePet(a, e.target.checked)} /> {a}
-                            </label>
-                          );
-                        })}
-                      </div>
+                      <MultiChips name="pets" options={L.pets} value={multi.pets ?? []} onChange={setMultiValue('pets')} />
                     </fieldset>
                   )}
+                  {fields.custom.filter((c) => c.type === 'multi').map((c) => (
+                    <fieldset key={c.id} className="fieldset">
+                      <legend>{c.label}{c.required ? ' *' : ''}</legend>
+                      <MultiChips name={`custom_${c.id}`} options={c.options} value={multi[`custom_${c.id}`] ?? []} onChange={setMultiValue(`custom_${c.id}`)} />
+                    </fieldset>
+                  ))}
                   <div id="politica" className="consent">
                     <label>
                       <input type="checkbox" name="consentData" required />

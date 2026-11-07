@@ -305,15 +305,23 @@ return [
         foreach (Db::all("SELECT DATE(verified_at) d, COUNT(*) n FROM `#__signatures` WHERE $where AND status = 'verified' GROUP BY d", $params) as $r) if (isset($daily[$r['d']])) $daily[$r['d']]['verified'] = (int)$r['n'];
 
         // Caracterización (solo firmas verificadas).
-        $rows = Db::all("SELECT gender, birth_date, zone, municipality, ethnic_group, pets FROM `#__signatures` WHERE $where AND status = 'verified'", $params);
-        $agg = ['gender' => [], 'age' => array_fill_keys(['18–24', '25–34', '35–44', '45–59', '60+'], 0), 'zone' => ['Urbana' => 0, 'Rural' => 0], 'municipality' => [], 'ethnic' => [], 'pets' => array_fill_keys(['Perros', 'Gatos', 'Otros', 'Ninguno'], 0)];
+        $rows = Db::all("SELECT gender, birth_date, zone, department, municipality, ethnic_group, pets FROM `#__signatures` WHERE $where AND status = 'verified'", $params);
+        $agg = ['gender' => [], 'age' => array_fill_keys(['18–24', '25–34', '35–44', '45–59', '60+'], 0), 'zone' => [], 'department' => [], 'municipality' => [], 'ethnic' => [], 'pets' => []];
+        // Las opciones configuradas en el evento aparecen aunque tengan 0 registros.
+        if ($event !== 'all' && ($ev = Db::one('SELECT * FROM `#__events` WHERE id = ?', [(int)$event]))) {
+            $L = event_fields($ev)['lists'];
+            $agg['zone'] = array_fill_keys($L['zone'], 0);
+            $agg['pets'] = array_fill_keys($L['pets'], 0);
+        }
+        $inc = function (array &$a, ?string $k) { if ($k !== null && $k !== '') $a[$k] = ($a[$k] ?? 0) + 1; };
         foreach ($rows as $r) {
-            if ($r['gender']) $agg['gender'][$r['gender']] = ($agg['gender'][$r['gender']] ?? 0) + 1;
+            $inc($agg['gender'], $r['gender']);
             if ($b = age_bucket($r['birth_date'])) $agg['age'][$b]++;
-            if ($r['zone'] && isset($agg['zone'][$r['zone']])) $agg['zone'][$r['zone']]++;
-            if ($r['municipality']) $agg['municipality'][$r['municipality']] = ($agg['municipality'][$r['municipality']] ?? 0) + 1;
-            if ($r['ethnic_group']) $agg['ethnic'][$r['ethnic_group']] = ($agg['ethnic'][$r['ethnic_group']] ?? 0) + 1;
-            foreach (array_filter(explode(',', (string)$r['pets'])) as $pet) if (isset($agg['pets'][$pet])) $agg['pets'][$pet]++;
+            $inc($agg['zone'], $r['zone']);
+            $inc($agg['department'], $r['department'] ?: ($r['municipality'] ? 'Sin departamento' : null));
+            $inc($agg['municipality'], $r['municipality'] ? $r['municipality'] . ($r['department'] ? ' · ' . $r['department'] : '') : null);
+            $inc($agg['ethnic'], $r['ethnic_group']);
+            foreach (array_filter(explode(',', (string)$r['pets'])) as $pet) $inc($agg['pets'], $pet);
         }
         $pairs = fn(array $a) => array_map(fn($k, $v) => ['label' => (string)$k, 'value' => $v], array_keys($a), $a);
         arsort($agg['gender']);
@@ -329,8 +337,9 @@ return [
             'daily' => array_map(fn($d, $v) => ['day' => $d] + $v, array_keys($daily), $daily),
             'gender' => $pairs($agg['gender']),
             'age' => $pairs($agg['age']),
-            'zone' => $agg['zone'],
-            'municipality' => top_with_others($agg['municipality']),
+            'zone' => $pairs($agg['zone']),
+            'department' => top_with_others($agg['department'], 8),
+            'municipality' => top_with_others($agg['municipality'], 8),
             'ethnic' => top_with_others($agg['ethnic']),
             'pets' => $pairs($agg['pets']),
         ];
@@ -345,13 +354,13 @@ return [
         $page = max(1, (int)($_GET['page'] ?? 1));
         $per = 25;
         $total = (int)Db::value("SELECT COUNT(*) FROM `#__signatures` s WHERE $where", $params);
-        $rows = Db::all("SELECT s.id, s.folio, s.full_name, s.municipality, s.created_at, s.verified_at, s.status, s.code_expires_at, e.name event_name
+        $rows = Db::all("SELECT s.id, s.folio, s.full_name, s.department, s.municipality, s.created_at, s.verified_at, s.status, s.code_expires_at, e.name event_name
             FROM `#__signatures` s JOIN `#__events` e ON e.id = s.event_id WHERE $where ORDER BY s.created_at DESC LIMIT $per OFFSET " . (($page - 1) * $per), $params);
         return [
             'total' => $total, 'page' => $page, 'perPage' => $per,
             'items' => array_map(fn($r) => [
                 'id' => (int)$r['id'], 'folio' => $r['folio'], 'name' => Util::maskName($r['full_name']),
-                'municipality' => $r['municipality'], 'event' => $r['event_name'],
+                'municipality' => $r['municipality'], 'department' => $r['department'], 'event' => $r['event_name'],
                 'createdAt' => Util::iso($r['created_at']), 'verifiedAt' => Util::iso($r['verified_at']),
                 'status' => $r['status'] === 'pending_code' && $r['code_expires_at'] && strtotime($r['code_expires_at'] . ' UTC') < time() ? 'expired' : $r['status'],
             ], $rows),
@@ -365,7 +374,7 @@ return [
         return [
             'id' => (int)$s['id'], 'folio' => $s['folio'], 'status' => $s['status'], 'event' => $s['event_name'],
             'fullName' => $s['full_name'], 'docType' => $s['doc_type'], 'docNumber' => $s['doc_number'], 'email' => $s['email'],
-            'phone' => $s['phone'], 'birthDate' => $s['birth_date'], 'gender' => $s['gender'], 'municipality' => $s['municipality'],
+            'phone' => $s['phone'], 'birthDate' => $s['birth_date'], 'gender' => $s['gender'], 'department' => $s['department'], 'municipality' => $s['municipality'],
             'zone' => $s['zone'], 'ethnicGroup' => $s['ethnic_group'], 'pets' => $s['pets'], 'extra' => json_decode((string)$s['extra'], true),
             'consentNews' => (bool)$s['consent_news'], 'signature' => $s['signature_png'], 'hash' => $s['hash'],
             'device' => $s['device'], 'ip' => $s['ip'],
@@ -378,7 +387,7 @@ return [
         [$where, $params] = signature_filter('s');
         if (($_GET['status'] ?? 'verified') === 'verified') $where .= " AND s.status = 'verified'";
         $st = Db::run("SELECT e.name evento, s.folio, s.status, s.full_name, s.doc_type, s.doc_number, s.email, s.phone, s.birth_date, s.gender,
-            s.municipality, s.zone, s.ethnic_group, s.pets, s.extra, s.consent_news, s.device, s.created_at, s.verified_at, s.hash
+            s.department, s.municipality, s.zone, s.ethnic_group, s.pets, s.extra, s.consent_news, s.device, s.created_at, s.verified_at, s.hash
             FROM `#__signatures` s JOIN `#__events` e ON e.id = s.event_id WHERE $where ORDER BY s.created_at", $params);
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="firmas-' . date('Y-m-d') . '.csv"');
@@ -386,7 +395,7 @@ return [
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF"); // BOM para que Excel reconozca UTF-8
         fputcsv($out, ['Evento', 'Folio', 'Estado', 'Nombre', 'Tipo documento', 'Documento', 'Correo', 'Celular', 'Nacimiento', 'Género',
-            'Municipio', 'Zona', 'Grupo étnico', 'Animales', 'Otros campos', 'Acepta información', 'Dispositivo', 'Registro (UTC)', 'Verificada (UTC)', 'Huella SHA-256'], ';');
+            'Departamento', 'Municipio', 'Zona', 'Grupo étnico', 'Animales', 'Otros campos', 'Acepta información', 'Dispositivo', 'Registro (UTC)', 'Verificada (UTC)', 'Huella SHA-256'], ';');
         $labels = ['education' => 'Nivel educativo', 'disability' => 'Discapacidad'];
         foreach (Db::all('SELECT fields FROM `#__events`') as $ev) {
             foreach ((json_decode((string)$ev['fields'], true)['custom'] ?? []) as $c) $labels[$c['id']] = $c['label'];

@@ -20,6 +20,7 @@ const STATUS_LABEL: Record<SignatureStatus, string> = {
   started: 'Datos', signed: 'Firmada', pending_code: 'Pendiente código', verified: 'Verificada', expired: 'Código vencido',
 };
 const STATUS_CLASS: Record<SignatureStatus, string> = { started: 'exp', signed: 'wait', pending_code: 'wait', verified: 'ok', expired: 'exp' };
+const ZONE_COLORS = ['#2C4BFF', '#F0A35E', '#1F8A5B', '#B04FC4', '#8C8A84'];
 const GENDER_COLORS = ['#2C4BFF', '#9BA9FF', '#E07A1F', '#B9B6AD', '#55524B'];
 
 const pct = (n: number, total: number) => (total ? (n / total * 100).toFixed(1).replace('.', ',') : '0') + ' %';
@@ -39,7 +40,7 @@ function HBars({ data, color, labelWidth }: { data: { label: string; value: numb
     <div className="hbars">
       {data.map(({ label, value }) => (
         <div key={label} className="hbar" style={{ gridTemplateColumns: `${labelWidth}px minmax(0, 1fr) 48px` }}>
-          <span>{label}</span>
+          <span title={label}>{label}</span>
           <div className="track"><div style={{ width: `${(value / max * 100).toFixed(1)}%`, background: color }} /></div>
           <strong className="val">{fmtNumber(value)}</strong>
         </div>
@@ -75,7 +76,7 @@ function SignatureDialog({ id, onClose }: { id: number; onClose: () => void }) {
   const rows: [string, string | null | undefined][] = data ? [
     ['Evento', data.event], ['Estado', STATUS_LABEL[data.status]], ['Folio', data.folio], ['Nombre', data.fullName],
     ['Documento', `${data.docType} ${data.docNumber}`], ['Correo', data.email], ['Celular', data.phone], ['Nacimiento', data.birthDate],
-    ['Género', data.gender], ['Municipio', data.municipality], ['Zona', data.zone], ['Grupo étnico', data.ethnicGroup], ['Animales', data.pets],
+    ['Género', data.gender], ['Departamento', data.department], ['Municipio', data.municipality], ['Zona', data.zone], ['Grupo étnico', data.ethnicGroup], ['Animales', data.pets],
     ...Object.entries(data.extra ?? {}).filter(([, v]) => v).map(([k, v]) => [k === 'education' ? 'Nivel educativo' : k === 'disability' ? 'Discapacidad' : 'Campo adicional', v] as [string, string]),
     ['Acepta información', data.consentNews ? 'Sí' : 'No'], ['Dispositivo', data.device], ['IP', data.ip],
     ['Registro', fmtDateTime(data.createdAt)], ['Firma', fmtDateTime(data.signedAt)], ['Verificada', fmtDateTime(data.verifiedAt)], ['Huella SHA-256', data.hash],
@@ -125,8 +126,13 @@ export function Dashboard() {
     ['Dibujaron la firma', t.signed],
     ['Verificaron el código', t.verified],
   ] : [];
-  const urban = a?.zone.Urbana ?? 0, rural = a?.zone.Rural ?? 0;
-  const urbanPct = urban + rural ? (urban / (urban + rural)) * 100 : 0;
+  const zones = a?.zone ?? [];
+  const zoneTotal = zones.reduce((n, z) => n + z.value, 0);
+  let acc = 0;
+  const zoneStops = zones.map((z, i) => {
+    const from = acc; acc += zoneTotal ? (z.value / zoneTotal) * 100 : 0;
+    return `${ZONE_COLORS[i % ZONE_COLORS.length]} ${from.toFixed(2)}% ${acc.toFixed(2)}%`;
+  }).join(', ');
   const maxAge = Math.max(1, ...(a?.age ?? []).map((x) => x.value));
   const pages = list.data ? Math.max(1, Math.ceil(list.data.total / list.data.perPage)) : 1;
 
@@ -248,20 +254,24 @@ export function Dashboard() {
         <div className="card">
           <h3 className="card-title">Zona de residencia</h3>
           <div className="donut-wrap">
-            <div className="donut" role="img" aria-label={`Urbana ${pct(urban, urban + rural)}, rural ${pct(rural, urban + rural)}`}
-              style={{ background: urban + rural ? `conic-gradient(#2C4BFF 0 ${urbanPct}%, #F0A35E ${urbanPct}% 100%)` : '#EFEDE8' }}>
+            <div className="donut" role="img" aria-label={zones.map((z) => `${z.label} ${pct(z.value, zoneTotal)}`).join(', ') || 'Sin datos'}
+              style={{ background: zoneTotal ? `conic-gradient(${zoneStops})` : '#EFEDE8' }}>
               <div className="donut__hole"><strong>{fmtNumber(verified)}</strong>firmas</div>
             </div>
             <ul className="zone-list">
-              <li><span className="sw" style={{ background: '#2C4BFF' }} />Urbana · <strong className="val">{fmtNumber(urban)}</strong></li>
-              <li><span className="sw" style={{ background: '#F0A35E' }} />Rural · <strong className="val">{fmtNumber(rural)}</strong></li>
+              {zones.map((z, i) => <li key={z.label}><span className="sw" style={{ background: ZONE_COLORS[i % ZONE_COLORS.length] }} />{z.label} · <strong className="val">{fmtNumber(z.value)}</strong></li>)}
             </ul>
           </div>
         </div>
 
         <div className="card">
+          <h3 className="card-title">Departamento</h3>
+          <HBars data={a?.department ?? []} color="#1F8A5B" labelWidth={120} />
+        </div>
+
+        <div className="card">
           <h3 className="card-title">Municipio</h3>
-          <HBars data={a?.municipality ?? []} color="#2C4BFF" labelWidth={84} />
+          <HBars data={a?.municipality ?? []} color="#2C4BFF" labelWidth={150} />
         </div>
 
         <div className="card">
@@ -301,7 +311,7 @@ export function Dashboard() {
                 <tr key={r.id}>
                   <td className="mono">{r.folio ?? '—'}</td>
                   <td>{r.name}</td>
-                  <td>{r.municipality ?? '—'}</td>
+                  <td>{r.municipality ? `${r.municipality}${r.department ? ` · ${r.department}` : ''}` : '—'}</td>
                   <td>{r.event}</td>
                   <td>{fmtDateTime(r.verifiedAt ?? r.createdAt)}</td>
                   <td><span className={`status status--${STATUS_CLASS[r.status]}`}>{STATUS_LABEL[r.status]}</span></td>

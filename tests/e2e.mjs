@@ -238,12 +238,50 @@ async function main() {
     await page.fill('label:has-text("Meta de firmas") input', '100');
     await page.fill('input[placeholder^="Nombre del campo"]', 'Barrio');
     await page.click('text=+ Agregar campo personalizado');
+    // Campo personalizado de opción múltiple con sus opciones en una pestaña.
+    await page.fill('input[placeholder^="Nombre del campo"]', 'Actividades');
+    await page.selectOption('select[aria-label="Tipo del campo nuevo"]', 'multi');
+    await page.click('text=+ Agregar campo personalizado');
+    await page.click('[role=tab]:has-text("Actividades")');
+    await page.fill('#opt-panel textarea', 'Adopción\nVoluntariado\nDonaciones\nNinguna');
+    // Lista de género ajustada para este evento.
+    await page.click('[role=tab]:has-text("Género")');
+    await page.fill('#opt-panel textarea', 'Femenino\nMasculino\nNo binario\nOtro\nPrefiero no decir');
+    // Alcance: solo Nariño (se marca al elegir «Solo algunos departamentos») y Putumayo.
+    await page.click('[role=tab]:has-text("Departamentos")');
+    await page.check('#opt-panel input[name=geo-scope] >> nth=1');
+    await page.check('#opt-panel label:has-text("Putumayo") input');
+    await page.waitForSelector('#opt-panel :text("2 departamentos")');
+    await page.screenshot({ path: `${SHOTS}/05-opciones-listas.png`, fullPage: true });
     await page.click('button:has-text("Publicar evento")');
     await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
     await page.waitForURL(/admin\/eventos\/\d+$/);
     eventId = Number(page.url().split('/').pop());
     eventSlug = await page.inputValue('.slug-field input');
     assert(eventSlug === 'pacto-por-el-bienestar-de-perros-y-gatos', `Enlace inesperado: ${eventSlug}`);
+  });
+  await test('guarda las listas, el campo de opción múltiple y los departamentos del evento', async () => {
+    const ev = await (await ctx.request.get(`${BASE}/api/admin/events/${eventId}`)).json();
+    assert(ev.fields.lists.gender.includes('Otro'), `Lista de género: ${ev.fields.lists.gender}`);
+    assert(JSON.stringify(ev.fields.geo.departments) === '["52","86"]', `Departamentos: ${JSON.stringify(ev.fields.geo)}`);
+    const act = ev.fields.custom.find((c) => c.label === 'Actividades');
+    assert(act && act.type === 'multi' && act.options.length === 4, `Campo múltiple: ${JSON.stringify(act)}`);
+  });
+  await test('rechaza listas con menos de 2 opciones y departamentos inexistentes', async () => {
+    const ev = await (await ctx.request.get(`${BASE}/api/admin/events/${eventId}`)).json();
+    const r = await ctx.request.put(`${BASE}/api/admin/events/${eventId}`, { headers: H, data: { ...ev, fields: { ...ev.fields, lists: { ...ev.fields.lists, zone: ['Urbana'] } } } });
+    assert(r.status() === 422, `Lista de 1 opción aceptada: ${r.status()}`);
+    const g = await ctx.request.put(`${BASE}/api/admin/events/${eventId}`, { headers: H, data: { ...ev, fields: { ...ev.fields, geo: { departments: ['52', '86', '00', '<script>'] } } } });
+    const saved = await g.json();
+    assert(g.ok() && JSON.stringify(saved.fields.geo.departments) === '["52","86"]', `Departamentos no depurados: ${JSON.stringify(saved.fields?.geo)}`);
+  });
+  await test('la lista oficial tiene 33 departamentos y 1.122 municipios', async () => {
+    const r = await ctx.request.get(`${BASE}/api/geo`);
+    const g = await r.json();
+    const total = g.departments.reduce((n, d) => n + d.municipalities.length, 0);
+    assert(g.departments.length === 33 && total === 1122, `${g.departments.length} departamentos, ${total} municipios`);
+    assert(g.departments.find((d) => d.code === '52').municipalities.length === 64, 'Nariño debe tener 64 municipios');
+    assert(/max-age/.test(r.headers()['cache-control'] ?? ''), 'La lista no se guarda en caché');
   });
   await test('sube un logo PNG válido', async () => {
     await page.setInputFiles('.drop:has-text("Logo") input[type=file]', { name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from(PNG.split(',')[1], 'base64') });
@@ -286,8 +324,17 @@ async function main() {
   await test('completa los datos personales', async () => {
     await pub.fill('[name=fullName]', signer.name); await pub.fill('[name=docNumber]', signer.doc); await pub.fill('[name=email]', signer.email);
     await pub.fill('[name=phone]', '3001234567'); await pub.fill('[name=birthDate]', '1990-05-01');
-    await pub.selectOption('[name=gender]', 'Femenino'); await pub.selectOption('[name=municipality]', 'Pasto');
-    await pub.selectOption('[name=ethnicGroup]', 'Campesino'); await pub.fill('input[name^=custom_]', 'Centro');
+    await pub.selectOption('[name=gender]', 'Otro');
+    const deps = await pub.locator('[name=department] option:not([disabled])').allTextContents();
+    assert(JSON.stringify(deps) === '["Nariño","Putumayo"]', `Departamentos ofrecidos: ${deps}`);
+    await pub.selectOption('[name=department]', '86');
+    assert(await pub.locator('[name=municipality] option', { hasText: 'Mocoa' }).count() === 1, 'Putumayo no muestra Mocoa');
+    await pub.selectOption('[name=department]', '52'); await pub.selectOption('[name=municipality]', 'Pasto');
+    // Opción múltiple personalizada: «Ninguna» también es excluyente.
+    await pub.check('[name^=custom_][value=Adopción]'); await pub.check('[name^=custom_][value=Ninguna]');
+    assert(!(await pub.isChecked('[name^=custom_][value=Adopción]')) && await pub.isDisabled('[name^=custom_][value=Voluntariado]'), '«Ninguna» no es excluyente');
+    await pub.uncheck('[name^=custom_][value=Ninguna]'); await pub.check('[name^=custom_][value=Voluntariado]');
+    await pub.selectOption('[name=ethnicGroup]', 'Campesino'); await pub.fill('input[type=text][name^=custom_]', 'Centro');
     await pub.check('[name=pets][value=Perros]'); await pub.check('[name=pets][value=Otros]');
     // «Ninguno» es excluyente: desmarca y deshabilita las demás; al quitarlo se vuelven a habilitar.
     await pub.check('[name=pets][value=Ninguno]');
@@ -360,9 +407,25 @@ async function main() {
     const r = await pubCtx.request.post(`${BASE}/api/events/${eventSlug}/signatures`, { headers: H, data: { fullName: 'X', docNumber: '99999999', email: 'x@example.com' } });
     assert(r.status() === 422, `Respondió ${r.status()}`);
   });
+  await test('rechaza valores fuera de las listas del evento y municipios de otro departamento', async () => {
+    const base = { fullName: 'Prueba', docType: 'Pasaporte', email: 'p@example.com', birthDate: '1980-01-01', gender: 'Femenino', zone: 'Urbana', consentData: true, custom: {} };
+    const send = (n, extra) => pubCtx.request.post(`${BASE}/api/events/${eventSlug}/signatures`, { headers: H, data: { ...base, docNumber: `ZZ${n}0000`, ...extra } });
+    const cases = [
+      [{ department: '52', municipality: 'Medellín' }, 'municipio de otro departamento'],
+      [{ department: '05', municipality: 'Medellín' }, 'departamento fuera del alcance del evento'],
+      [{ department: '52', municipality: 'Pasto', gender: 'Inventado' }, 'género fuera de la lista'],
+      [{ department: '52', municipality: 'Pasto', zone: 'Marte' }, 'zona fuera de la lista'],
+      [{ department: '52', municipality: 'Pasto', ethnicGroup: '<b>x</b>' }, 'grupo étnico fuera de la lista'],
+    ];
+    for (const [i, [extra, label]] of cases.entries()) {
+      const r = await send(i, extra);
+      assert(r.status() === 422, `${label}: respondió ${r.status()}`);
+    }
+  });
   await test('segunda firma por API (nombre con fórmula para probar el CSV)', async () => {
     const ev = await (await pubCtx.request.get(`${BASE}/api/events/${eventSlug}`)).json();
-    const custom = { [ev.fields.custom[0].id]: 'Obrero' };
+    const act = ev.fields.custom.find((c) => c.type === 'multi');
+    const custom = { [ev.fields.custom[0].id]: 'Obrero', [act.id]: ['Donaciones', 'Ninguna', 'Inventada'] };
     const r = await pubCtx.request.post(`${BASE}/api/events/${eventSlug}/signatures`, {
       headers: H, data: { fullName: '=HYPERLINK("http://malo")', docType: 'Pasaporte', docNumber: 'AB123456', email: 'pedro@example.com', birthDate: '1970-03-03', gender: 'Masculino', municipality: 'Ipiales', zone: 'Rural', ethnicGroup: 'Indígena', pets: ['Ninguno', 'Gatos'], consentData: true, custom },
     });
@@ -378,7 +441,12 @@ async function main() {
     await page.waitForSelector(`text=${folio}`);
     const a = await (await ctx.request.get(`${BASE}/api/admin/analytics?event=all&period=30`)).json();
     assert(a.totals.verified === 2 && a.totals.started === 2, `Totales inesperados: ${JSON.stringify(a.totals)}`);
-    assert(a.zone.Urbana === 1 && a.zone.Rural === 1, 'Zona mal contada');
+    const zone = Object.fromEntries(a.zone.map((z) => [z.label, z.value]));
+    assert(zone.Urbana === 1 && zone.Rural === 1, `Zona mal contada: ${JSON.stringify(a.zone)}`);
+    assert(a.department.length === 1 && a.department[0].label === 'Nariño' && a.department[0].value === 2, `Departamentos: ${JSON.stringify(a.department)}`);
+    assert(a.municipality.some((m) => m.label === 'Pasto · Nariño') && a.municipality.some((m) => m.label === 'Ipiales · Nariño'), `Municipios: ${JSON.stringify(a.municipality)}`);
+    assert(a.gender.some((g) => g.label === 'Otro'), 'El género personalizado no aparece en la analítica');
+    await page.waitForSelector('.card:has(h3:has-text("Departamento")) :text("Nariño")');
     assert(a.age.find((x) => x.label === '35–44').value === 1 && a.age.find((x) => x.label === '45–59').value === 1, 'Edades mal agrupadas');
     await page.waitForTimeout(800);
     await page.screenshot({ path: `${SHOTS}/07-dashboard.png`, fullPage: true });
@@ -399,6 +467,8 @@ async function main() {
     assert(body[0] === 0xef && body[1] === 0xbb && body[2] === 0xbf, 'Falta el BOM UTF-8');
     const text = body.toString('utf8');
     assert(text.includes(folio) && text.includes('Barrio: Centro'), 'El CSV no tiene los datos esperados');
+    assert(text.split('\n')[0].includes('Departamento;Municipio'), 'Falta la columna Departamento');
+    assert(text.includes('Actividades: Voluntariado') && text.includes('Actividades: Ninguna'), 'La opción múltiple no se guardó bien');
     assert(text.includes(`"'=HYPERLINK`) && !/;"?=HYPERLINK/.test(text), 'La fórmula no fue neutralizada');
   });
 

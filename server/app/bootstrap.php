@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/version.php';
 foreach (['Db', 'Http', 'Totp', 'Mailer', 'Auth', 'Util', 'Pdf'] as $lib) require __DIR__ . "/lib/{$lib}.php";
+require __DIR__ . '/geo.php';
 require __DIR__ . '/events.php';
 
 define('ROOT_DIR', dirname(__DIR__));

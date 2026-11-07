@@ -13,11 +13,15 @@ Plataforma web para recoger firmas verificadas por correo, con caracterización 
 | `/admin/acceso` | Acceso de administrador con contraseña y verificación en dos pasos (QR TOTP + códigos de recuperación), y «¿Olvidaste tu contraseña?» por correo |
 | `/admin/restablecer/<token>` | Crear una contraseña nueva desde el enlace del correo (vence en 1 hora, un solo uso) |
 | `/admin` | Analítica: indicadores, registros por día, embudo, caracterización y últimos registros |
-| `/admin/eventos` | Lista y configuración de eventos con vista previa en vivo, logo, fondo, colores, campos y QR del enlace |
+| `/admin/eventos` | Lista y configuración de eventos con vista previa en vivo, logo, fondo, colores, campos y QR del enlace. Cada evento ajusta en pestañas las opciones de sus listas (género, zona, grupo étnico, animales, nivel educativo, discapacidad y campos personalizados de lista u opción múltiple) y los departamentos permitidos |
 | `/admin/ajustes` | Plataforma, correo SMTP, contraseña, códigos de recuperación y administradores |
 | `/install/` | Asistente de instalación |
 
 Seguridad: contraseñas con `password_hash`, 2FA obligatorio (un código TOTP no se acepta dos veces), bloqueo de 15 min tras 5 intentos, límites por IP, cookies `HttpOnly` + `SameSite=Strict`, cabecera anti-CSRF, carpetas `app/` y `config/` bloqueadas, `uploads/` sin ejecución de scripts, validación de imágenes y SVG, exportación CSV protegida contra inyección de fórmulas.
+
+### Caracterización territorial
+
+Departamento y municipio salen de la DIVIPOLA del DANE (33 departamentos y 1.122 municipios, distritos y áreas no municipalizadas, en `server/app/data/colombia.json`). El firmante elige el departamento y luego el municipio; el servidor valida que el municipio pertenezca al departamento y al alcance del evento, y la analítica agrupa por departamento y municipio. En las listas de opción múltiple, «Ninguno» o «Ninguna» desmarca las demás opciones.
 
 ## Requisitos del hosting
 

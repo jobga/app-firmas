@@ -38,7 +38,17 @@ export const del = <T>(p: string, b?: unknown) => api<T>(p, 'DELETE', b ?? {});
 // ---------- Tipos ----------
 export type EventColors = { bg: string; title: string; text: string; button: string };
 export type OptionalField = 'phone' | 'birth_date' | 'gender' | 'municipality' | 'zone' | 'ethnic_group' | 'pets' | 'education' | 'disability';
-export type CustomField = { id?: string; label: string; required: boolean };
+export type CustomFieldType = 'text' | 'select' | 'multi';
+export type CustomField = { id?: string; label: string; required: boolean; type: CustomFieldType; options: string[] };
+/** Campos de caracterización cuya lista de opciones se configura en cada evento. */
+export type ListKey = 'gender' | 'zone' | 'ethnic_group' | 'pets' | 'education' | 'disability';
+export type EventFields = {
+  optional: Record<OptionalField, boolean>;
+  custom: CustomField[];
+  lists: Record<ListKey, string[]>;
+  /** Códigos DIVIPOLA de los departamentos permitidos ([] = todo el país). */
+  geo: { departments: string[] };
+};
 
 export type PublicEvent = {
   id: number;
@@ -54,7 +64,7 @@ export type PublicEvent = {
   colors: EventColors;
   logoUrl: string | null;
   backgroundUrl: string | null;
-  fields: { optional: Record<OptionalField, boolean>; custom: CustomField[] };
+  fields: EventFields;
   municipalities: string[];
   animation: 'both' | 'cats' | 'dogs' | 'off';
   intensity: 'subtle' | 'medium' | 'high';
@@ -94,20 +104,21 @@ export type Analytics = {
   daily: { day: string; started: number; verified: number }[];
   gender: { label: string; value: number }[];
   age: { label: string; value: number }[];
-  zone: { Urbana: number; Rural: number };
+  zone: { label: string; value: number }[];
+  department: { label: string; value: number }[];
   municipality: { label: string; value: number }[];
   ethnic: { label: string; value: number }[];
   pets: { label: string; value: number }[];
 };
 
 export type SignatureRow = {
-  id: number; folio: string | null; name: string; municipality: string | null; event: string;
+  id: number; folio: string | null; name: string; municipality: string | null; department: string | null; event: string;
   createdAt: string; verifiedAt: string | null; status: SignatureStatus;
 };
 
 export type SignatureDetail = {
   id: number; folio: string | null; status: SignatureStatus; event: string; fullName: string; docType: string; docNumber: string;
-  email: string; phone: string | null; birthDate: string | null; gender: string | null; municipality: string | null; zone: string | null;
+  email: string; phone: string | null; birthDate: string | null; gender: string | null; department: string | null; municipality: string | null; zone: string | null;
   ethnicGroup: string | null; pets: string | null; extra: Record<string, string | null> | null; consentNews: boolean;
   signature: string | null; hash: string | null; device: string | null; ip: string | null;
   createdAt: string; signedAt: string | null; verifiedAt: string | null;
@@ -122,3 +133,6 @@ export const fmtNumber = (n: number) => n.toLocaleString('es-CO');
 export const fmtDateTime = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 export const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('es-CO', { dateStyle: 'long' }) : '—');
+
+/** Opción excluyente en listas de opción múltiple («Ninguno», «Ninguna»). */
+export const isExclusiveOption = (o: string) => /^ningun[oa]s?$/i.test(o.trim());
