@@ -4,6 +4,9 @@
  * Uso:
  *   BASE_URL=http://localhost:8080 DB_NAME=animalista DB_USER=animalista DB_PASS='...' node tests/e2e.mjs
  *
+ * BASE_URL puede incluir una carpeta (http://localhost:8080/firmas) o ser un subdominio (http://firmas.localhost:8081).
+ * DB_PREFIX (opcional, «an_» por defecto) permite instalar varias copias en la misma base de datos.
+ *
  * Requisitos: Playwright con Chromium. Las pruebas levantan un servidor SMTP de prueba en 127.0.0.1:2525
  * para leer los códigos enviados por correo, y el asistente de instalación se configura para usarlo.
  * Usa una base de datos vacía: el script instala la plataforma desde cero.
@@ -22,10 +25,13 @@ const BASE = (process.env.BASE_URL ?? 'http://localhost:8080').replace(/\/$/, ''
 const DB = {
   host: process.env.DB_HOST ?? '127.0.0.1', port: process.env.DB_PORT ?? '3306',
   name: process.env.DB_NAME ?? 'animalista', user: process.env.DB_USER ?? 'animalista', pass: process.env.DB_PASS ?? '',
+  prefix: process.env.DB_PREFIX ?? 'an_',
 };
 const SHOTS = process.env.SHOTS_DIR ?? 'test-results';
 const ADMIN = { name: 'Jonnathan Bucheli Galindo', email: 'admin@example.com', pass: 'ClaveSegura2026' };
 const H = { 'X-Requested-With': 'animalista' };
+const ORIGIN = new URL(BASE).origin;
+const BASE_PATH = new URL(BASE).pathname.replace(/\/$/, '');
 mkdirSync(SHOTS, { recursive: true });
 
 // ---------- Mini arnés de pruebas ----------
@@ -138,6 +144,7 @@ async function main() {
   await test('credenciales de base de datos erróneas muestran un error', async () => {
     await page.fill('[name=db_host]', DB.host); await page.fill('[name=db_port]', DB.port);
     await page.fill('[name=db_name]', DB.name); await page.fill('[name=db_user]', DB.user); await page.fill('[name=db_pass]', 'incorrecta');
+    await page.fill('[name=db_prefix]', DB.prefix);
     await page.click('button[type=submit]');
     await page.waitForSelector('.alert--error:has-text("No se pudo conectar")');
   });
@@ -155,6 +162,8 @@ async function main() {
     await page.waitForSelector('.alert--error:has-text("al menos 10")');
   });
   await test('configura el sitio, el administrador y el correo', async () => {
+    const guess = await page.inputValue('[name=site_url]');
+    assert(guess === BASE, `El asistente propuso la URL «${guess}» en lugar de «${BASE}»`);
     await page.fill('[name=site_url]', BASE);
     await page.fill('[name=admin_pass]', ADMIN.pass); await page.fill('[name=admin_pass2]', ADMIN.pass);
     await page.click('button:has-text("Continuar")');
@@ -170,6 +179,8 @@ async function main() {
   await test('instala y queda bloqueado', async () => {
     await page.click('button:has-text("Instalar ahora")');
     await page.waitForSelector('text=¡Instalación completada!');
+    const panel = await page.getAttribute('a:has-text("Ir al panel")', 'href');
+    assert(panel === BASE_PATH + '/admin/acceso', `El enlace al panel apunta a «${panel}»`);
     await page.screenshot({ path: `${SHOTS}/02-instalado.png`, fullPage: true });
     const again = await (await browser.newContext()).newPage();
     await again.goto(BASE + '/install/');
@@ -238,7 +249,8 @@ async function main() {
     await page.setInputFiles('.drop:has-text("Logo") input[type=file]', { name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from(PNG.split(',')[1], 'base64') });
     await page.waitForSelector('.alert--ok:has-text("Logo actualizado")');
     const src = await page.getAttribute('.drop:has-text("Logo") img', 'src');
-    const r = await ctx.request.get(BASE + src);
+    const r = await ctx.request.get(new URL(src, page.url()).href);
+    assert(new URL(src, page.url()).pathname.startsWith(BASE_PATH + '/uploads/'), `El logo no está dentro de la carpeta de instalación: ${src}`);
     assert(r.status() === 200 && r.headers()['content-type'].includes('image/png'), 'El logo no se sirve como imagen');
   });
   await test('rechaza un PHP disfrazado de imagen y un SVG con script', async () => {
@@ -314,6 +326,7 @@ async function main() {
     await new Promise((r) => setTimeout(r, 500));
     const mail = inbox.find((m) => m.to === signer.email && m.text.includes(folio) && /Huella: [a-f0-9]{64}/.test(m.text));
     assert(mail, 'No llegó el comprobante');
+    assert(mail.text.includes(`${ORIGIN}${BASE_PATH}/comprobante/`), 'El enlace del comprobante no apunta a la instalación');
     assert(mail.raw.includes('Content-Type: application/pdf') && mail.raw.includes(`filename="comprobante-${folio}.pdf"`), 'El correo no trae el PDF adjunto');
   });
   await test('«Descargar comprobante» descarga un PDF válido', async () => {
@@ -461,7 +474,8 @@ async function main() {
   });
   await test('el enlace permite crear una contraseña nueva', async () => {
     const f = await (await browser.newContext()).newPage();
-    await f.goto(resetLink.replace(/^https?:\/\/[^/]+/, BASE));
+    assert(resetLink.startsWith(ORIGIN + BASE_PATH + '/admin/restablecer/'), `El enlace del correo no apunta a la instalación: ${resetLink}`);
+    await f.goto(resetLink);
     await f.fill('[name=password]', NEW_PASS); await f.fill('[name=password2]', NEW_PASS);
     await f.click('text=Guardar contraseña');
     await f.waitForSelector('text=Contraseña actualizada');

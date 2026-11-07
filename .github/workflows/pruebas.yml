@@ -12,9 +12,19 @@ permissions:
 
 jobs:
   e2e:
-    name: Instalación y pruebas de extremo a extremo
+    name: Pruebas (${{ matrix.ubicacion }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ubicacion: raíz del dominio
+            base: ''
+          - ubicacion: subdirectorio /firmas
+            base: /firmas
+          - ubicacion: subdirectorio anidado /campanas/2026
+            base: /campanas/2026
     services:
       mariadb:
         image: mariadb:10.11
@@ -61,12 +71,12 @@ jobs:
 
       - name: Servir el paquete con PHP
         run: |
-          PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8080 -t release/animalista-firmas scripts/dev-router.php > php-server.log 2>&1 &
-          for i in $(seq 1 20); do curl -fs http://127.0.0.1:8080/api/status && break; sleep 1; done
+          APP_BASE='${{ matrix.base }}' PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8080 -t release/animalista-firmas scripts/dev-router.php > php-server.log 2>&1 &
+          for i in $(seq 1 20); do curl -fs 'http://127.0.0.1:8080${{ matrix.base }}/api/status' && break; sleep 1; done
 
       - name: Pruebas de extremo a extremo
         env:
-          BASE_URL: http://127.0.0.1:8080
+          BASE_URL: http://127.0.0.1:8080${{ matrix.base }}
           DB_HOST: 127.0.0.1
           DB_NAME: animalista
           DB_USER: animalista
@@ -77,14 +87,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: resultados-pruebas
+          name: resultados-pruebas-${{ strategy.job-index }}
           path: |
             test-results/
             php-server.log
           if-no-files-found: ignore
 
       - name: Guardar el ZIP para Plesk
-        if: success()
+        if: success() && matrix.base == ''
         uses: actions/upload-artifact@v5
         with:
           name: animalista-firmas-zip

@@ -9,13 +9,19 @@ require dirname(__DIR__) . '/app/bootstrap.php';
 header('X-Content-Type-Options: nosniff');
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-$path = '/' . trim(preg_replace('#^.*?/api(?=/|$)#', '', $uri), '/');
+$uri = rawurldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+// Quita la carpeta de instalación y "/api" (p. ej. /firmas/api/events/x → /events/x).
+$apiPrefix = app_base_path() . '/api';
+$path = str_starts_with($uri, $apiPrefix . '/') || $uri === $apiPrefix
+    ? substr($uri, strlen($apiPrefix))
+    : preg_replace('#^.*?/api(?=/|$)#', '', $uri);
+$path = '/' . trim((string)$path, '/');
 
 try {
     if (!app_installed()) {
-        if ($path === '/status') Http::json(['installed' => false, 'installUrl' => '/install/']);
-        throw new HttpError(503, 'La plataforma aún no está instalada', ['installUrl' => '/install/']);
+        $installUrl = app_base_path() . '/install/';
+        if ($path === '/status') Http::json(['installed' => false, 'installUrl' => $installUrl]);
+        throw new HttpError(503, 'La plataforma aún no está instalada', ['installUrl' => $installUrl]);
     }
     app_boot();
 

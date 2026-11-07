@@ -9,8 +9,8 @@ final class Auth
     {
         if (session_status() === PHP_SESSION_ACTIVE) return;
         $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-        session_name('animalista_sid');
-        session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => $secure, 'httponly' => true, 'samesite' => 'Strict']);
+        session_name(app_cookie_name('animalista_sid'));
+        session_set_cookie_params(['lifetime' => 0, 'path' => app_base_path() . '/', 'secure' => $secure, 'httponly' => true, 'samesite' => 'Strict']);
         session_start();
     }
 

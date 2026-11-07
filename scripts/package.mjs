@@ -4,7 +4,7 @@
  *
  * Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +30,8 @@ cpSync(join(root, 'server'), app, {
     return rel !== 'config/config.php' && !rel.startsWith('uploads/events');
   },
 });
+// La plantilla HTML la sirve index.php, que le indica la carpeta de instalación (raíz o subdirectorio).
+renameSync(join(app, 'index.html'), join(app, 'app', 'spa.html'));
 for (const f of ['README.md', 'AUTHORS.md', 'LICENSE.md']) if (existsSync(join(root, f))) cpSync(join(root, f), join(app, f));
 writeFileSync(join(app, 'VERSION'), `${version}\nAnimalista · Plataforma de firmas — © Jonnathan Bucheli Galindo\n`);
 

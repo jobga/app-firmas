@@ -7,6 +7,7 @@ import { AdminLayout } from '../components/AdminLayout';
 import { Alert } from '../components/Alert';
 import { fmtDate, fmtNumber, get, post, type AdminEvent } from '../lib/api';
 import { useAsync } from '../lib/useAsync';
+import { appUrl } from '../lib/base';
 import './Dashboard.css';
 import './EventConfig.css';
 
@@ -41,7 +42,7 @@ export function Events() {
                   </td>
                   <td>{fmtNumber(e.verifiedCount)}{e.goal ? ` / ${fmtNumber(e.goal)}` : ''}</td>
                   <td>{e.closesAt ? fmtDate(e.closesAt) : 'Sin fecha'}</td>
-                  <td className="mono small"><a href={`/firma/${e.slug}`} target="_blank" rel="noreferrer">/firma/{e.slug}</a></td>
+                  <td className="mono small"><a href={appUrl(`/firma/${e.slug}`)} target="_blank" rel="noreferrer">{appUrl(`/firma/${e.slug}`)}</a></td>
                   <td>
                     <div className="btn-row" style={{ gap: 8, flexWrap: 'nowrap' }}>
                       <Link to={`/admin/eventos/${e.id}`} className="btn btn--outline btn--sm">Editar</Link>

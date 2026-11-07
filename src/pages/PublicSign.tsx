@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type F
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, fmtDate, fmtDateTime, fmtNumber, get, post, type PublicEvent, type Receipt } from '../lib/api';
 import { useAsync } from '../lib/useAsync';
+import { absoluteUrl, apiUrl } from '../lib/base';
 import { AnimalDrawing, CatAndDog, CatMark } from '../components/LineArt';
 import { Icon } from '../components/Icon';
 import { CodeInput } from '../components/CodeInput';
@@ -117,7 +118,7 @@ function SignFlow({ event }: { event: PublicEvent }) {
   });
 
   const share = async () => {
-    const url = window.location.origin + '/firma/' + event.slug;
+    const url = absoluteUrl('/firma/' + event.slug);
     if (navigator.share) await navigator.share({ title: event.name, url }).catch(() => undefined);
     else { await navigator.clipboard?.writeText(url); setNotice('Enlace copiado al portapapeles.'); }
   };
@@ -320,7 +321,7 @@ function SignFlow({ event }: { event: PublicEvent }) {
                     <span><strong>Verificada:</strong> {fmtDateTime(receipt.verifiedAt)}</span>
                   </div>
                   <div className="btn-row btn-row--center">
-                    <a href={`/api/receipts/${receipt.token ?? token}/pdf`} className="btn btn--primary" download>Descargar comprobante</a>
+                    <a href={apiUrl(`/receipts/${receipt.token ?? token}/pdf`)} className="btn btn--primary" download>Descargar comprobante</a>
                     <button type="button" className="btn btn--outline" onClick={share}>Compartir convocatoria</button>
                   </div>
                   <Link to={`/comprobante/${receipt.token ?? token}`} className="small">Ver comprobante en línea</Link>

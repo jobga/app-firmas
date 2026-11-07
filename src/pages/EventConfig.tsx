@@ -12,6 +12,7 @@ import { QrCode } from '../components/QrCode';
 import QRCode from 'qrcode';
 import { api, ApiError, del, get, post, put, type AdminEvent, type CustomField, type EventColors, type OptionalField } from '../lib/api';
 import { contrastRatio } from '../lib/contrast';
+import { absoluteUrl, appUrl } from '../lib/base';
 import './EventConfig.css';
 
 const COLOR_FIELDS: { key: keyof EventColors; label: string }[] = [
@@ -140,8 +141,8 @@ export function EventConfig() {
   const rButton = contrastRatio('#FFFFFF', colors.button);
   const contrastOk = rText >= 4.5 && rButton >= 4.5;
   const ratios = `texto ${rText.toFixed(1)}:1 · botón ${rButton.toFixed(1)}:1`;
-  const publicPath = event ? `/firma/${event.slug}` : null;
-  const publicUrl = publicPath ? window.location.origin + publicPath : '';
+  const publicPath = event ? appUrl(`/firma/${event.slug}`) : null;
+  const publicUrl = event ? absoluteUrl(`/firma/${event.slug}`) : '';
 
   if (loading) return <AdminLayout><div className="page-loading" aria-busy="true">Cargando…</div></AdminLayout>;
 
@@ -182,7 +183,7 @@ export function EventConfig() {
               <input className="field" type="url" placeholder="https://tu-organizacion.org/politica-de-datos" value={draft.policyUrl} onChange={(e) => set('policyUrl', e.target.value)} />
             </label>
             <label className="lbl">Enlace público
-              <span className="slug-field"><span className="mono small muted">/firma/</span>
+              <span className="slug-field"><span className="mono small muted">{appUrl('/firma/')}</span>
                 <input className="field" type="text" maxLength={120} placeholder="se genera del nombre" value={draft.slug} onChange={(e) => set('slug', e.target.value)} />
               </span>
             </label>

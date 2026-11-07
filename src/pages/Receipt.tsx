@@ -6,6 +6,7 @@ import { useParams } from 'react-router-dom';
 import { fmtDateTime, get, type Receipt as ReceiptData } from '../lib/api';
 import { useAsync } from '../lib/useAsync';
 import { CatMark } from '../components/LineArt';
+import { apiUrl } from '../lib/base';
 import './Receipt.css';
 
 export function Receipt() {
@@ -40,7 +41,7 @@ export function Receipt() {
         )}
         <p className="xsmall muted">La huella digital permite comprobar que el registro no fue alterado después de la verificación del código enviado al correo del firmante.</p>
         <div className="btn-row rcpt__actions">
-          <a className="btn btn--primary" href={`/api/receipts/${encodeURIComponent(token)}/pdf`} download>Descargar PDF</a>
+          <a className="btn btn--primary" href={apiUrl(`/receipts/${encodeURIComponent(token)}/pdf`)} download>Descargar PDF</a>
           <button type="button" className="btn btn--outline" onClick={() => window.print()}>Imprimir</button>
         </div>
       </article>

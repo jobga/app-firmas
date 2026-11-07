@@ -9,6 +9,7 @@ import { Icon } from '../components/Icon';
 import { Alert } from '../components/Alert';
 import { useHashScroll } from '../lib/useHashScroll';
 import { useAsync } from '../lib/useAsync';
+import { apiUrl } from '../lib/base';
 import {
   fmtDateTime, fmtNumber, get,
   type AdminEvent, type Analytics, type SignatureDetail, type SignatureRow, type SignatureStatus,
@@ -147,7 +148,7 @@ export function Dashboard() {
               <option value="30">Últimos 30 días</option><option value="7">Últimos 7 días</option><option value="90">Últimos 90 días</option><option value="all">Desde el inicio</option>
             </select>
           </label>
-          <a id="exportar" href={`/api/admin/export?${qs}`} className="btn btn--primary btn--sm" style={{ alignSelf: 'flex-end' }}>
+          <a id="exportar" href={apiUrl(`/admin/export?${qs}`)} className="btn btn--primary btn--sm" style={{ alignSelf: 'flex-end' }}>
             <Icon name="download" size={16} strokeWidth={1.8} />Exportar Excel / CSV
           </a>
         </div>

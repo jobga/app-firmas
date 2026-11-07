@@ -13,6 +13,23 @@ define('ROOT_DIR', dirname(__DIR__));
 define('CONFIG_FILE', ROOT_DIR . '/config/config.php');
 define('UPLOADS_DIR', ROOT_DIR . '/uploads');
 
+/**
+ * Carpeta web donde está instalada la plataforma: "" en la raíz o un subdominio, "/firmas" en un subdirectorio.
+ * Se deduce del script en ejecución (api/index.php o install/index.php, un nivel por debajo de la raíz).
+ */
+function app_base_path(): string
+{
+    static $base = null;
+    return $base ??= rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/api/index.php', 2)), '/');
+}
+
+/** Nombre de cookie propio de cada instalación, para que dos instalaciones en el mismo dominio no se mezclen. */
+function app_cookie_name(string $prefix): string
+{
+    $base = app_base_path();
+    return $base === '' ? $prefix : $prefix . '_' . substr(md5($base), 0, 8);
+}
+
 function app_installed(): bool
 {
     return is_file(CONFIG_FILE);

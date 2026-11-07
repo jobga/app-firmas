@@ -32,7 +32,7 @@ function event_public(array $e): array
     $open = $e['status'] === 'published'
         && (!$e['opens_at'] || $e['opens_at'] <= $now)
         && (!$e['closes_at'] || $e['closes_at'] > $now);
-    $base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/api/index.php', 2), '/');
+    $base = app_base_path();
     return [
         'id' => (int)$e['id'],
         'slug' => $e['slug'],

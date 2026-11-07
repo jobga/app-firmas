@@ -1,7 +1,9 @@
 /**
- * Cliente de la API PHP (`/api`).
+ * Cliente de la API PHP (`<carpeta de instalación>/api`).
  * Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo
  */
+import { apiUrl } from './base';
+
 export class ApiError extends Error {
   constructor(public status: number, message: string, public field?: string, public data?: Record<string, unknown>) {
     super(message);
@@ -19,7 +21,7 @@ export async function api<T>(path: string, method: Method = 'GET', body?: unknow
   }
   let res: Response;
   try {
-    res = await fetch('/api' + path, init);
+    res = await fetch(apiUrl(path), init);
   } catch {
     throw new ApiError(0, 'No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo.');
   }

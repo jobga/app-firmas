@@ -24,7 +24,7 @@ Seguridad: contraseñas con `password_hash`, 2FA obligatorio (un código TOTP no
 - PHP 8.1 o superior con `pdo_mysql`, `openssl`, `mbstring`, `fileinfo`
 - MySQL 5.7+ o MariaDB 10.3+
 - Apache (con `mod_rewrite`) o nginx + Apache de Plesk. En Plesk para Windows (IIS) se incluye `web.config`.
-- Se instala en la raíz de un dominio o subdominio (p. ej. `https://firmas.tudominio.org`).
+- Se instala en la raíz de un dominio, en un subdominio o en cualquier subdirectorio (ver «Dónde se puede instalar»).
 
 ## Instalación en Plesk (paso a paso)
 
@@ -50,6 +50,21 @@ Seguridad: contraseñas con `password_hash`, 2FA obligatorio (un código TOTP no
 8. Al terminar, **elimina la carpeta `install/`** (el asistente ya queda bloqueado, pero es buena práctica).
 9. Entra a `/admin/acceso`, escanea el QR con Google Authenticator, Microsoft Authenticator o Authy y guarda los códigos de recuperación.
 10. En **Eventos**, edita el evento de ejemplo o crea uno nuevo y pulsa **Publicar evento**.
+
+## Dónde se puede instalar
+
+El mismo ZIP funciona sin cambios en cualquiera de estas ubicaciones; la plataforma detecta sola su carpeta:
+
+| Ubicación | Ejemplo | En Plesk |
+| --- | --- | --- |
+| Raíz del dominio | `https://tudominio.org/` | Extrae el ZIP en `httpdocs` |
+| Subdominio | `https://firmas.tudominio.org/` | *Sitios web y dominios → Añadir subdominio*; extrae el ZIP en la carpeta raíz del subdominio |
+| Subdirectorio | `https://tudominio.org/firmas/` | Crea la carpeta `httpdocs/firmas` y extrae ahí el ZIP |
+| Subdirectorio anidado | `https://tudominio.org/campanas/2026/` | Igual, en `httpdocs/campanas/2026` |
+
+- Abre la dirección elegida: te llevará al asistente en `<dirección>/install/`.
+- Puedes tener varias instalaciones en el mismo dominio, por ejemplo una por campaña. Cada una tiene su propia sesión de administrador, sus archivos y sus tablas. Pueden compartir la misma base de datos si usas un **prefijo de tablas distinto** para cada una (paso 2 del asistente).
+- Si el sitio principal del dominio es otra aplicación (por ejemplo WordPress), el subdirectorio de la plataforma tiene su propio `.htaccess` y no interfiere con ella.
 
 ## Actualizar una instalación
 
@@ -92,9 +107,15 @@ La batería de pruebas de extremo a extremo instala la plataforma desde cero con
 BASE_URL=http://localhost:8080 DB_NAME=animalista DB_USER=animalista DB_PASS='Firmas#2026' npm run test:e2e
 ```
 
+`BASE_URL` puede apuntar a un subdirectorio (`http://localhost:8080/firmas`) o a un subdominio, y `DB_PREFIX` permite probar varias instalaciones en la misma base de datos. Para servir el paquete en un subdirectorio sin Apache:
+
+```bash
+APP_BASE=/firmas php -S 127.0.0.1:8080 -t release/animalista-firmas scripts/dev-router.php
+```
+
 Las capturas quedan en `test-results/`.
 
-En GitHub, el flujo `.github/workflows/pruebas.yml` corre lo mismo en cada push y pull request con PHP 8.1 (la versión mínima) y MariaDB, y publica el ZIP listo para Plesk como artefacto.
+En GitHub, el flujo `.github/workflows/pruebas.yml` corre lo mismo en cada push y pull request con PHP 8.1 (la versión mínima) y MariaDB, instalando la plataforma en la raíz, en `/firmas` y en `/campanas/2026`, y publica el ZIP listo para Plesk como artefacto.
 
 ## Estructura
 

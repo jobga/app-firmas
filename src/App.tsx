@@ -4,6 +4,7 @@
  */
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import { BASE } from './lib/base';
 import { InstallGate } from './components/InstallGate';
 import { RequireAdmin } from './components/RequireAdmin';
 import { PublicSign } from './pages/PublicSign';
@@ -20,7 +21,7 @@ const admin = (el: ReactNode) => <RequireAdmin>{el}</RequireAdmin>;
 export function App() {
   return (
     <InstallGate>
-      <BrowserRouter>
+      <BrowserRouter basename={BASE || undefined}>
         <Routes>
           <Route path="/" element={<PublicSign />} />
           <Route path="/firma/:slug" element={<PublicSign />} />

@@ -16,8 +16,12 @@ require $root . '/app/lib/Mailer.php';
 
 $configFile = $root . '/config/config.php';
 
-session_name('animalista_install');
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict', 'path' => '/']);
+// Carpeta web de la instalación: "" en la raíz o un subdominio, "/firmas" en un subdirectorio.
+$base = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/install/index.php', 2)), '/');
+define('APP_BASE', $base);
+
+session_name($base === '' ? 'animalista_install' : 'animalista_install_' . substr(md5($base), 0, 8));
+session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict', 'path' => $base . '/']);
 session_start();
 $_SESSION['csrf'] ??= bin2hex(random_bytes(16));
 $S = &$_SESSION;
@@ -40,7 +44,7 @@ if (is_file($configFile) && !$showingDone) {
         <h2>La plataforma ya está instalada</h2>
         <p>Por seguridad el asistente se desactivó. Si necesitas reinstalar, elimina <code>config/config.php</code> desde el Administrador de archivos de Plesk y vuelve a abrir esta página.</p>
         <p>Te recomendamos eliminar la carpeta <code>install/</code> del servidor.</p>
-        <div class="actions"><a class="btn" href="/admin/acceso">Ir al panel de administración</a></div>
+        <div class="actions"><a class="btn" href="<?= h(APP_BASE) ?>/admin/acceso">Ir al panel de administración</a></div>
         <?php
     }, 0);
     exit;
@@ -265,7 +269,7 @@ render_page($steps[$step], function () use ($step, $root, $csrf, $D, $S, $v) {
     <?php elseif ($step === 3):
         $site = $D['site'] ?? [];
         $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-        $guess = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost'); ?>
+        $guess = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . APP_BASE; ?>
         <?php if (!empty($S['db_ok'])): ?><div class="alert alert--ok">Conexión correcta (<?= h($S['db_ok']) ?>).</div><?php endif; ?>
         <h2>Sitio y administrador</h2>
         <form method="post" class="form"><?= $csrf ?>
@@ -322,7 +326,7 @@ render_page($steps[$step], function () use ($step, $root, $csrf, $D, $S, $v) {
         <h2>¡Instalación completada!</h2>
         <p>La plataforma quedó lista. Ingresa con el correo <strong><?= h($D['site']['admin_email'] ?? '') ?></strong> y activa la verificación en dos pasos.</p>
         <div class="alert alert--warn"><strong>Importante:</strong> por seguridad elimina la carpeta <code>install/</code> del servidor desde el Administrador de archivos de Plesk. El asistente ya quedó bloqueado.</div>
-        <div class="actions"><a class="btn" href="/admin/acceso">Ir al panel de administración</a></div>
+        <div class="actions"><a class="btn" href="<?= h(APP_BASE) ?>/admin/acceso">Ir al panel de administración</a></div>
         <?php $_SESSION = []; ?>
     <?php else: $db = $D['db'] ?? []; $site = $D['site'] ?? []; $m = $D['mail'] ?? []; ?>
         <h2>Todo listo para instalar</h2>
