@@ -78,7 +78,10 @@ function SignatureDialog({ id, onClose }: { id: number; onClose: () => void }) {
     ['Género', data.gender], ['Municipio', data.municipality], ['Zona', data.zone], ['Grupo étnico', data.ethnicGroup], ['Animales', data.pets],
     ...Object.entries(data.extra ?? {}).filter(([, v]) => v).map(([k, v]) => [k === 'education' ? 'Nivel educativo' : k === 'disability' ? 'Discapacidad' : 'Campo adicional', v] as [string, string]),
     ['Acepta información', data.consentNews ? 'Sí' : 'No'], ['Dispositivo', data.device], ['IP', data.ip],
-    ['Registro', fmtDateTime(data.createdAt)], ['Firma', fmtDateTime(data.signedAt)], ['Verificada', fmtDateTime(data.verifiedAt)], ['Huella SHA-256', data.hash],
+    ['Registro', fmtDateTime(data.createdAt)], ['Firma', fmtDateTime(data.signedAt)],
+    [data.verification === 'none' ? 'Registrada' : 'Verificada', fmtDateTime(data.verifiedAt)],
+    ['Verificación', data.verification === 'none' ? 'Sin código por correo' : data.verification === 'email' ? 'Código por correo' : null],
+    ['Huella SHA-256', data.hash],
   ] : [];
   return (
     <dialog ref={ref} className="sig-dialog" onClose={onClose} aria-labelledby="sig-title">
@@ -118,12 +121,13 @@ export function Dashboard() {
   const t = a?.totals;
   const prev = a?.previous ?? undefined;
   const verified = t?.verified ?? 0;
+  const selectedEvent = events.data?.find((ev) => String(ev.id) === event);
   const funnelTop = Math.max(t?.visits ?? 0, t?.started ?? 0, 1);
   const funnel: [string, number][] = t ? [
     ['Abrieron la convocatoria', Math.max(t.visits, t.started)],
     ['Completaron datos y autorización', t.started],
     ['Dibujaron la firma', t.signed],
-    ['Verificaron el código', t.verified],
+    [selectedEvent && !selectedEvent.requireEmailCode ? 'Firma registrada' : 'Verificaron el código', t.verified],
   ] : [];
   const urban = a?.zone.Urbana ?? 0, rural = a?.zone.Rural ?? 0;
   const urbanPct = urban + rural ? (urban / (urban + rural)) * 100 : 0;

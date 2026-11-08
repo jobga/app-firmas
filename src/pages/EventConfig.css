@@ -47,3 +47,8 @@
 .about { margin: 0; display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px 12px; font-size: 14px; }
 .about dt { font-weight: 600; color: var(--ink); }
 .about dd { margin: 0; }
+.verify-toggle { display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--line-soft); padding-top: 18px; }
+.verify-toggle__switch { align-items: flex-start; line-height: 1.45; }
+.verify-toggle__switch input { margin-top: 3px; flex: none; }
+.verify-toggle__options { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.verify-toggle__options:disabled { opacity: 0.5; }

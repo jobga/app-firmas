@@ -30,7 +30,8 @@ export function Receipt() {
           <dt>Folio</dt><dd className="mono">{data.folio}</dd>
           <dt>Firmante</dt><dd>{data.signer}</dd>
           <dt>Documento</dt><dd>{data.document}</dd>
-          <dt>Verificada</dt><dd>{fmtDateTime(data.verifiedAt)}</dd>
+          <dt>{data.verification === 'none' ? 'Registrada' : 'Verificada'}</dt><dd>{fmtDateTime(data.verifiedAt)}</dd>
+          <dt>Verificación</dt><dd>{data.verification === 'none' ? 'Sin código por correo (no exigido en este evento)' : 'Código enviado al correo del firmante'}</dd>
           <dt>Huella SHA-256</dt><dd className="mono rcpt__hash">{data.hash}</dd>
         </dl>
         {data.signature && (
@@ -39,7 +40,11 @@ export function Receipt() {
             <figcaption>Firma registrada</figcaption>
           </figure>
         )}
-        <p className="xsmall muted">La huella digital permite comprobar que el registro no fue alterado después de la verificación del código enviado al correo del firmante.</p>
+        <p className="xsmall muted">
+          {data.verification === 'none'
+            ? 'La huella digital permite comprobar que el registro no fue alterado después de firmar. En este evento no se verificó el correo con un código.'
+            : 'La huella digital permite comprobar que el registro no fue alterado después de la verificación del código enviado al correo del firmante.'}
+        </p>
         <div className="btn-row rcpt__actions">
           <a className="btn btn--primary" href={apiUrl(`/receipts/${encodeURIComponent(token)}/pdf`)} download>Descargar PDF</a>
           <button type="button" className="btn btn--outline" onClick={() => window.print()}>Imprimir</button>

@@ -13,4 +13,10 @@ return [
         // Impide reutilizar un código TOTP ya aceptado (RFC 6238, sección 5.2).
         'ALTER TABLE `#__admins` ADD COLUMN `totp_last_counter` BIGINT NULL AFTER `totp_enabled`',
     ],
+    4 => [
+        // Cada evento decide si pide el código de verificación por correo; cada firma guarda cómo se verificó.
+        'ALTER TABLE `#__events` ADD COLUMN `require_email_code` TINYINT(1) NOT NULL DEFAULT 1 AFTER `max_attempts`',
+        "ALTER TABLE `#__signatures` ADD COLUMN `verification` VARCHAR(10) NULL AFTER `hash`",
+        "UPDATE `#__signatures` SET `verification` = 'email' WHERE `status` = 'verified' AND `verification` IS NULL",
+    ],
 ];
