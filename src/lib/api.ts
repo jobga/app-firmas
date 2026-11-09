@@ -69,6 +69,9 @@ export type PublicEvent = {
   animation: 'both' | 'cats' | 'dogs' | 'off';
   intensity: 'subtle' | 'medium' | 'high';
   codeTtlMinutes: number;
+  /** Si es false, la firma se registra sin el código de verificación por correo. */
+  requireEmailCode: boolean;
+  sendReceipt: boolean;
   isOpen: boolean;
   verifiedCount: number;
 };
@@ -76,7 +79,6 @@ export type PublicEvent = {
 export type AdminEvent = PublicEvent & {
   maxAttempts: number;
   emailSubject: string;
-  sendReceipt: boolean;
   createdAt: string;
   updatedAt: string;
   isDefault?: boolean;
@@ -90,6 +92,8 @@ export type Receipt = {
   document: string;
   verifiedAt: string;
   hash: string;
+  /** 'email': se verificó con el código enviado al correo; 'none': el evento no lo exigía. */
+  verification: 'email' | 'none';
   signature: string | null;
   token?: string;
 };
@@ -120,7 +124,7 @@ export type SignatureDetail = {
   id: number; folio: string | null; status: SignatureStatus; event: string; fullName: string; docType: string; docNumber: string;
   email: string; phone: string | null; birthDate: string | null; gender: string | null; department: string | null; municipality: string | null; zone: string | null;
   ethnicGroup: string | null; pets: string | null; extra: Record<string, string | null> | null; consentNews: boolean;
-  signature: string | null; hash: string | null; device: string | null; ip: string | null;
+  signature: string | null; hash: string | null; verification: 'email' | 'none' | null; device: string | null; ip: string | null;
   createdAt: string; signedAt: string | null; verifiedAt: string | null;
 };
 

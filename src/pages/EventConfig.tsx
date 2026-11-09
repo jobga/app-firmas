@@ -50,7 +50,7 @@ type Draft = {
   opensAt: string; closesAt: string; goal: string; colors: EventColors;
   optional: Record<OptionalField, boolean>; custom: CustomField[]; lists: Record<ListKey, string[]>; geoDeps: string[];
   animation: AdminEvent['animation']; intensity: AdminEvent['intensity'];
-  codeTtlMinutes: number; maxAttempts: number; emailSubject: string; sendReceipt: boolean;
+  codeTtlMinutes: number; maxAttempts: number; requireEmailCode: boolean; emailSubject: string; sendReceipt: boolean;
 };
 
 const toLocalInput = (iso: string | null) => {
@@ -64,7 +64,7 @@ const EMPTY: Draft = {
   colors: { bg: '#F7F6F2', title: '#161616', text: '#3D3B36', button: '#2C4BFF' },
   optional: { phone: true, birth_date: true, gender: true, municipality: true, zone: true, ethnic_group: true, pets: true, education: false, disability: false },
   custom: [], lists: DEFAULT_LISTS, geoDeps: [],
-  animation: 'both', intensity: 'subtle', codeTtlMinutes: 10, maxAttempts: 3, emailSubject: 'Tu código para confirmar la firma', sendReceipt: true,
+  animation: 'both', intensity: 'subtle', codeTtlMinutes: 10, maxAttempts: 3, requireEmailCode: true, emailSubject: 'Tu código para confirmar la firma', sendReceipt: true,
 };
 
 function fromEvent(e: AdminEvent): Draft {
@@ -73,7 +73,7 @@ function fromEvent(e: AdminEvent): Draft {
     opensAt: toLocalInput(e.opensAt), closesAt: toLocalInput(e.closesAt), goal: e.goal ? String(e.goal) : '',
     colors: e.colors, optional: e.fields.optional, custom: e.fields.custom, lists: { ...DEFAULT_LISTS, ...e.fields.lists }, geoDeps: e.fields.geo.departments,
     animation: e.animation, intensity: e.intensity, codeTtlMinutes: e.codeTtlMinutes, maxAttempts: e.maxAttempts,
-    emailSubject: e.emailSubject, sendReceipt: e.sendReceipt,
+    requireEmailCode: e.requireEmailCode, emailSubject: e.emailSubject, sendReceipt: e.sendReceipt,
   };
 }
 
@@ -116,7 +116,7 @@ export function EventConfig() {
         geo: { departments: draft.geoDeps },
       },
       animation: draft.animation, intensity: draft.intensity, codeTtlMinutes: draft.codeTtlMinutes, maxAttempts: draft.maxAttempts,
-      emailSubject: draft.emailSubject, sendReceipt: draft.sendReceipt,
+      requireEmailCode: draft.requireEmailCode, emailSubject: draft.emailSubject, sendReceipt: draft.sendReceipt,
     };
     try {
       const saved = isNew ? await post<AdminEvent>('/admin/events', body) : await put<AdminEvent>(`/admin/events/${id}`, body);
@@ -305,20 +305,38 @@ export function EventConfig() {
                   <option value="subtle">Sutil</option><option value="medium">Media</option><option value="high">Alta</option>
                 </select>
               </label>
-              <label className="lbl">Vigencia del código
-                <select className="field" value={draft.codeTtlMinutes} onChange={(e) => set('codeTtlMinutes', Number(e.target.value))}>
-                  <option value={10}>10 minutos</option><option value={5}>5 minutos</option><option value={15}>15 minutos</option>
-                </select>
-              </label>
-              <label className="lbl">Intentos máximos
-                <select className="field" value={draft.maxAttempts} onChange={(e) => set('maxAttempts', Number(e.target.value))}>
-                  <option value={3}>3</option><option value={5}>5</option>
-                </select>
-              </label>
             </div>
-            <label className="lbl">Asunto del correo de verificación
-              <input className="field" type="text" maxLength={255} value={draft.emailSubject} onChange={(e) => set('emailSubject', e.target.value)} />
-            </label>
+
+            <div className="verify-toggle">
+              <label className="check-row verify-toggle__switch">
+                <input type="checkbox" checked={draft.requireEmailCode} onChange={(e) => set('requireEmailCode', e.target.checked)} />
+                <span><strong>Solicitar código de verificación por correo</strong><br />
+                  <span className="small muted">El firmante recibe un código de 6 dígitos y debe escribirlo para que su firma quede registrada.</span></span>
+              </label>
+              {!draft.requireEmailCode && (
+                <Alert tone="warn">
+                  Sin el código, la firma queda registrada en cuanto la persona la dibuja y no se comprueba que el correo sea suyo: alguien podría firmar con un correo ajeno.
+                  Úsalo solo en convocatorias de bajo riesgo o con verificación presencial. Las firmas quedarán marcadas como «Sin código» en el comprobante y en la exportación.
+                </Alert>
+              )}
+              <fieldset className="verify-toggle__options" disabled={!draft.requireEmailCode} aria-label="Opciones del código de verificación">
+                <div className="grid-4">
+                  <label className="lbl">Vigencia del código
+                    <select className="field" value={draft.codeTtlMinutes} onChange={(e) => set('codeTtlMinutes', Number(e.target.value))}>
+                      <option value={10}>10 minutos</option><option value={5}>5 minutos</option><option value={15}>15 minutos</option>
+                    </select>
+                  </label>
+                  <label className="lbl">Intentos máximos
+                    <select className="field" value={draft.maxAttempts} onChange={(e) => set('maxAttempts', Number(e.target.value))}>
+                      <option value={3}>3</option><option value={5}>5</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="lbl">Asunto del correo de verificación
+                  <input className="field" type="text" maxLength={255} value={draft.emailSubject} onChange={(e) => set('emailSubject', e.target.value)} />
+                </label>
+              </fieldset>
+            </div>
             <label className="check-row"><input type="checkbox" checked={draft.sendReceipt} onChange={(e) => set('sendReceipt', e.target.checked)} /> Enviar comprobante con folio y hash al completar la firma</label>
           </section>
 

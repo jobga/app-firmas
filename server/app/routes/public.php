@@ -100,7 +100,10 @@ function receipt_pdf(array $s, array $e): string
     $pdf->line($x, $y, $x + $w, $y);
     $y += 30;
 
-    $rows = [['Folio', $r['folio'], 'mono'], ['Firmante', $r['signer'], 'regular'], ['Documento', $r['document'], 'regular'], ['Verificada', $when, 'regular']];
+    $byEmail = $r['verification'] === 'email';
+    $rows = [['Folio', $r['folio'], 'mono'], ['Firmante', $r['signer'], 'regular'], ['Documento', $r['document'], 'regular'],
+        [$byEmail ? 'Verificada' : 'Registrada', $when, 'regular'],
+        ['Verificación', $byEmail ? 'Código enviado al correo del firmante' : 'Sin código por correo (no exigido en este evento)', 'regular']];
     foreach ($rows as [$label, $value, $font]) {
         $pdf->text($x, $y, $label, 11, 'bold', '#161616');
         $pdf->text($x + 130, $y, (string)$value, 11, $font);
@@ -120,13 +123,53 @@ function receipt_pdf(array $s, array $e): string
     $pdf->text($x + ($w - Pdf::width($label, 9)) / 2, $y + $boxH - 12, $label, 9, 'regular', '#6B6860');
     $y += $boxH + 28;
 
-    $y = $pdf->paragraph($x, $y, $w, 'La huella digital (SHA-256) se calculó al verificar el código enviado al correo del firmante e incluye sus datos y la imagen de la firma. Permite comprobar que el registro no fue alterado después de la verificación. El registro original se conserva en la plataforma del evento.', 9.5, 'regular', '#6B6860');
+    $y = $pdf->paragraph($x, $y, $w, ($byEmail
+        ? 'La huella digital (SHA-256) se calculó al verificar el código enviado al correo del firmante e incluye sus datos y la imagen de la firma. Permite comprobar que el registro no fue alterado después de la verificación.'
+        : 'La huella digital (SHA-256) se calculó al registrar la firma e incluye los datos del firmante y la imagen de la firma. Permite comprobar que el registro no fue alterado después de firmar. En este evento no se verificó el correo con un código.')
+        . ' El registro original se conserva en la plataforma del evento.', 9.5, 'regular', '#6B6860');
 
     $pdf->line($x, Pdf::H - 64, $x + $w, Pdf::H - 64);
     $pdf->text($x, Pdf::H - 46, 'Animalista · Plataforma de firmas', 8.5, 'bold', '#3D3B36');
     $gen = 'Generado el ' . (new DateTime('now', new DateTimeZone($tz)))->format('d/m/Y H:i');
     $pdf->text($x + $w - Pdf::width($gen, 8.5), Pdf::H - 46, $gen, 8.5, 'regular', '#6B6860');
     return $pdf->output();
+}
+
+/**
+ * Cierra una firma: asigna folio, calcula la huella y envía el comprobante.
+ * $method: 'email' (se verificó el código enviado al correo) o 'none' (el evento no pide código).
+ */
+function complete_signature(array $s, array $e, string $method): array
+{
+    $dup = Db::value("SELECT COUNT(*) FROM `#__signatures` WHERE event_id = ? AND doc_type = ? AND doc_number = ? AND status = 'verified'", [$e['id'], $s['doc_type'], $s['doc_number']]);
+    if ($dup) throw new HttpError(409, 'Este documento ya firmó en esta convocatoria');
+
+    $verifiedAt = Util::now();
+    $folio = 'AN-' . str_pad((string)$s['id'], 6, '0', STR_PAD_LEFT);
+    $hash = hash('sha256', json_encode([
+        'event' => (int)$e['id'], 'folio' => $folio, 'name' => $s['full_name'], 'docType' => $s['doc_type'],
+        'doc' => $s['doc_number'], 'email' => $s['email'], 'verifiedAt' => $verifiedAt,
+        'signature' => hash('sha256', (string)$s['signature_png']), 'verification' => $method,
+    ], JSON_UNESCAPED_UNICODE));
+    Db::update('signatures', ['status' => 'verified', 'folio' => $folio, 'hash' => $hash, 'verification' => $method, 'verified_at' => $verifiedAt, 'code_hash' => null], 'id = ?', [$s['id']]);
+    $s = find_signature($s['token']);
+
+    if ($e['send_receipt']) {
+        $url = Util::baseUrl() . '/comprobante/' . $s['token'];
+        $ev = Util::e($e['name']);
+        $html = "<div style=\"font-family:Arial,sans-serif;color:#3D3B36;max-width:520px\">"
+            . "<h2 style=\"color:#161616\">¡Gracias! Tu firma quedó registrada</h2>"
+            . "<p>Evento: <strong>{$ev}</strong></p><p>Folio: <strong>{$folio}</strong><br>" . ($method === 'email' ? 'Verificada' : 'Registrada') . ": " . date('Y-m-d H:i', strtotime($verifiedAt . ' UTC')) . "</p>"
+            . "<p style=\"font-family:monospace;font-size:12px;word-break:break-all\">Huella (SHA-256): {$hash}</p>"
+            . "<p>Adjuntamos el comprobante en PDF. También puedes <a href=\"{$url}\">verlo en línea</a>.</p></div>";
+        try {
+            Mailer::fromSettings()->send($s['email'], 'Comprobante de tu firma · ' . $folio, $html, "Folio: {$folio}\nHuella: {$hash}\nComprobante: {$url}",
+                [['name' => "comprobante-{$folio}.pdf", 'mime' => 'application/pdf', 'data' => receipt_pdf($s, $e)]]);
+        } catch (Throwable $err) {
+            error_log('[animalista] comprobante: ' . $err->getMessage());
+        }
+    }
+    return receipt_data($s, $e) + ['token' => $s['token']];
 }
 
 function receipt_data(array $s, array $e): array
@@ -139,6 +182,7 @@ function receipt_data(array $s, array $e): array
         'document' => $s['doc_type'] . ' ••••' . substr($s['doc_number'], -3),
         'verifiedAt' => Util::iso($s['verified_at']),
         'hash' => $s['hash'],
+        'verification' => $s['verification'] ?? 'email',
         'signature' => $s['signature_png'],
     ];
 }
@@ -260,7 +304,7 @@ return [
         return ['token' => $token];
     }],
 
-    // Paso 2: firma dibujada (PNG). Envía el código al correo.
+    // Paso 2: firma dibujada (PNG). Envía el código al correo o, si el evento no lo pide, cierra la firma.
     ['POST', '/signatures/{token}/sign', function ($p) {
         $s = find_signature($p['token']);
         if ($s['status'] === 'verified') throw new HttpError(409, 'Esta firma ya fue verificada');
@@ -271,14 +315,19 @@ return [
         $bin = base64_decode($m[1], true);
         if ($bin === false || strlen($bin) > 600 * 1024 || substr($bin, 0, 8) !== "\x89PNG\r\n\x1a\n") throw new HttpError(422, 'La imagen de la firma no es válida');
         Db::update('signatures', ['signature_png' => $img, 'status' => 'signed', 'signed_at' => Util::now()], 'id = ?', [$s['id']]);
+        if (!(int)$e['require_email_code']) {
+            // El evento no pide código: la firma queda registrada de inmediato.
+            return ['verified' => true] + complete_signature(find_signature($p['token']), $e, 'none');
+        }
         send_code(find_signature($p['token']), $e);
-        return ['ok' => true, 'email' => $s['email'], 'codeTtlMinutes' => (int)$e['code_ttl_minutes']];
+        return ['ok' => true, 'verified' => false, 'email' => $s['email'], 'codeTtlMinutes' => (int)$e['code_ttl_minutes']];
     }],
 
     ['POST', '/signatures/{token}/resend', function ($p) {
         $s = find_signature($p['token']);
         if (!in_array($s['status'], ['pending_code', 'expired'], true)) throw new HttpError(409, 'Primero dibuja tu firma');
         $e = signature_event($s);
+        if (!(int)$e['require_email_code']) throw new HttpError(409, 'Este evento no usa código de verificación');
         assert_open($e);
         send_code($s, $e);
         return ['ok' => true];
@@ -301,35 +350,7 @@ return [
             $left = (int)$e['max_attempts'] - (int)$s['code_attempts'] - 1;
             throw new HttpError(422, $left > 0 ? "Código incorrecto. Te quedan {$left} intentos." : 'Código incorrecto. Solicita un nuevo código.');
         }
-        $dup = Db::value("SELECT COUNT(*) FROM `#__signatures` WHERE event_id = ? AND doc_type = ? AND doc_number = ? AND status = 'verified'", [$e['id'], $s['doc_type'], $s['doc_number']]);
-        if ($dup) throw new HttpError(409, 'Este documento ya firmó en esta convocatoria');
-
-        $verifiedAt = Util::now();
-        $folio = 'AN-' . str_pad((string)$s['id'], 6, '0', STR_PAD_LEFT);
-        $hash = hash('sha256', json_encode([
-            'event' => (int)$e['id'], 'folio' => $folio, 'name' => $s['full_name'], 'docType' => $s['doc_type'],
-            'doc' => $s['doc_number'], 'email' => $s['email'], 'verifiedAt' => $verifiedAt,
-            'signature' => hash('sha256', (string)$s['signature_png']),
-        ], JSON_UNESCAPED_UNICODE));
-        Db::update('signatures', ['status' => 'verified', 'folio' => $folio, 'hash' => $hash, 'verified_at' => $verifiedAt, 'code_hash' => null], 'id = ?', [$s['id']]);
-        $s = find_signature($p['token']);
-
-        if ($e['send_receipt']) {
-            $url = Util::baseUrl() . '/comprobante/' . $s['token'];
-            $ev = Util::e($e['name']);
-            $html = "<div style=\"font-family:Arial,sans-serif;color:#3D3B36;max-width:520px\">"
-                . "<h2 style=\"color:#161616\">¡Gracias! Tu firma quedó registrada</h2>"
-                . "<p>Evento: <strong>{$ev}</strong></p><p>Folio: <strong>{$folio}</strong><br>Verificada: " . date('Y-m-d H:i', strtotime($verifiedAt . ' UTC')) . "</p>"
-                . "<p style=\"font-family:monospace;font-size:12px;word-break:break-all\">Huella (SHA-256): {$hash}</p>"
-                . "<p>Adjuntamos el comprobante en PDF. También puedes <a href=\"{$url}\">verlo en línea</a>.</p></div>";
-            try {
-                Mailer::fromSettings()->send($s['email'], 'Comprobante de tu firma · ' . $folio, $html, "Folio: {$folio}\nHuella: {$hash}\nComprobante: {$url}",
-                    [['name' => "comprobante-{$folio}.pdf", 'mime' => 'application/pdf', 'data' => receipt_pdf($s, $e)]]);
-            } catch (Throwable $err) {
-                error_log('[animalista] comprobante: ' . $err->getMessage());
-            }
-        }
-        return receipt_data($s, $e) + ['token' => $s['token']];
+        return complete_signature($s, $e, 'email');
     }],
 
     ['GET', '/receipts/{token}/pdf', function ($p) {

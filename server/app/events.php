@@ -122,6 +122,8 @@ function event_public(array $e): array
         'animation' => $e['animation'],
         'intensity' => $e['intensity'],
         'codeTtlMinutes' => (int)$e['code_ttl_minutes'],
+        'requireEmailCode' => (bool)($e['require_email_code'] ?? true),
+        'sendReceipt' => (bool)$e['send_receipt'],
         'isOpen' => $open,
         'verifiedCount' => (int)Db::value("SELECT COUNT(*) FROM `#__signatures` WHERE event_id = ? AND status = 'verified'", [$e['id']]),
     ];
@@ -132,7 +134,6 @@ function event_admin(array $e): array
     return event_public($e) + [
         'maxAttempts' => (int)$e['max_attempts'],
         'emailSubject' => $e['email_subject'],
-        'sendReceipt' => (bool)$e['send_receipt'],
         'createdAt' => Util::iso($e['created_at']),
         'updatedAt' => Util::iso($e['updated_at']),
     ];
@@ -197,6 +198,7 @@ function event_from_input(array $b, ?array $current = null): array
         'intensity' => $in($b['intensity'] ?? null, ['subtle', 'medium', 'high'], 'subtle'),
         'code_ttl_minutes' => $in((int)($b['codeTtlMinutes'] ?? 10), [5, 10, 15], 10),
         'max_attempts' => $in((int)($b['maxAttempts'] ?? 3), [3, 5], 3),
+        'require_email_code' => array_key_exists('requireEmailCode', $b) ? (!empty($b['requireEmailCode']) ? 1 : 0) : (int)($current['require_email_code'] ?? 1),
         'email_subject' => Http::str($b, 'emailSubject', 255) ?? 'Tu código para confirmar la firma',
         'send_receipt' => !empty($b['sendReceipt']) ? 1 : 0,
     ];

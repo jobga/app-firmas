@@ -472,7 +472,85 @@ async function main() {
     assert(text.includes(`"'=HYPERLINK`) && !/;"?=HYPERLINK/.test(text), 'La fórmula no fue neutralizada');
   });
 
-  section('6. Seguridad');
+  section('6. Evento sin código de verificación por correo');
+  let noCodeSlug = '';
+  await test('el panel permite desactivar el código y avisa del riesgo', async () => {
+    await page.goto(BASE + '/admin/eventos/nuevo');
+    await page.waitForSelector('text=Nuevo evento');
+    await page.fill('label:has-text("Nombre del evento") input', 'Firmatón presencial');
+    await page.fill('input[placeholder^="Nombre del campo"]', 'Barrio');
+    await page.click('text=+ Agregar campo personalizado');
+    const toggle = page.locator('label:has-text("Solicitar código de verificación por correo") input');
+    assert(await toggle.isChecked(), 'El código debe venir activado por defecto');
+    await toggle.uncheck();
+    await page.waitForSelector('.alert--warn:has-text("no se comprueba que el correo sea suyo")');
+    assert(await page.locator('label:has-text("Vigencia del código") select').isDisabled(), 'Las opciones del código deberían quedar deshabilitadas');
+    await page.click('button:has-text("Publicar evento")');
+    await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
+    noCodeSlug = await page.inputValue('.slug-field input');
+    await page.reload();
+    await page.waitForSelector('text=Configurar evento');
+    assert(!(await page.locator('label:has-text("Solicitar código de verificación por correo") input').isChecked()), 'El ajuste no se guardó');
+    await page.screenshot({ path: `${SHOTS}/09-evento-sin-codigo.png`, fullPage: true });
+  });
+  await test('la firma queda registrada sin pedir código y sin enviar correo de código', async () => {
+    const s = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
+    s.on('pageerror', (e) => consoleErrors.push('sin código: ' + e.message));
+    await s.goto(`${BASE}/firma/${noCodeSlug}`);
+    await s.waitForSelector('text=Tus datos');
+    const labels = await s.locator('.steps__label').allTextContents();
+    assert(labels.join('|') === '1. Datos|2. Firma|3. Listo', `Pasos inesperados: ${labels.join(' | ')}`);
+    await s.fill('[name=fullName]', 'Sofía Rosero'); await s.fill('[name=docNumber]', '27123456'); await s.fill('[name=email]', 'sofia@example.com');
+    await s.fill('[name=birthDate]', '2001-08-15'); await s.selectOption('[name=gender]', 'Femenino'); await s.selectOption('[name=department]', '52'); await s.selectOption('[name=municipality]', 'Tumaco');
+    await s.fill('input[name^=custom_]', 'El Morro'); await s.check('[name=consentData]');
+    await s.click('text=Continuar a la firma');
+    await s.waitForSelector('text=Dibuja tu firma');
+    const box = await s.locator('canvas[aria-label="Área para dibujar la firma"]').boundingBox();
+    await s.mouse.move(box.x + 80, box.y + 140); await s.mouse.down();
+    for (let i = 0; i < 30; i++) await s.mouse.move(box.x + 80 + i * 12, box.y + 140 + Math.cos(i / 3) * 40);
+    await s.mouse.up();
+    const before = inbox.filter((m) => m.to === 'sofia@example.com' && /es: \d{6}/.test(m.text)).length;
+    await s.click('button:has-text("Firmar")');
+    await s.waitForSelector('text=Tu firma quedó registrada');
+    assert(await s.locator('text=Confirma tu firma').count() === 0, 'Se mostró el paso del código');
+    assert((await s.textContent('.done__receipt')).includes('Registrada:'), 'El resumen debería decir «Registrada»');
+    await new Promise((r) => setTimeout(r, 500));
+    assert(inbox.filter((m) => m.to === 'sofia@example.com' && /es: \d{6}/.test(m.text)).length === before, 'Se envió un código aunque el evento no lo pide');
+    const mail = inbox.find((m) => m.to === 'sofia@example.com' && m.text.includes('Folio:'));
+    assert(mail && mail.raw.includes('application/pdf'), 'No llegó el comprobante con el PDF');
+    const [download] = await Promise.all([s.waitForEvent('download'), s.click('text=Descargar comprobante')]);
+    const pdf = await (await import('node:fs/promises')).readFile(await download.path());
+    assert(pdf.subarray(0, 5).toString() === '%PDF-', 'El comprobante no es un PDF');
+    await s.click('text=Ver comprobante en línea');
+    await s.waitForSelector('text=Sin código por correo');
+  });
+  await test('la API no acepta reenviar ni pedir códigos en ese evento', async () => {
+    const c = await browser.newContext();
+    const r = await c.request.post(`${BASE}/api/events/${noCodeSlug}/signatures`, {
+      headers: H, data: { fullName: 'Prueba API', docType: 'Cédula de ciudadanía', docNumber: '1234567890', email: 'api@example.com', birthDate: '1985-01-01', gender: 'Masculino', municipality: 'Pasto', zone: 'Urbana', consentData: true, custom: { [(await (await c.request.get(`${BASE}/api/events/${noCodeSlug}`)).json()).fields.custom[0].id]: 'Centro' } },
+    });
+    const { token } = await r.json();
+    const signed = await (await c.request.post(`${BASE}/api/signatures/${token}/sign`, { headers: H, data: { image: PNG } })).json();
+    assert(signed.verified === true && /^AN-\d{6}$/.test(signed.folio) && signed.verification === 'none', `Respuesta inesperada: ${JSON.stringify(signed).slice(0, 120)}`);
+    const resend = await c.request.post(`${BASE}/api/signatures/${token}/resend`, { headers: H });
+    assert(resend.status() === 409, `Reenviar respondió ${resend.status()}`);
+  });
+  await test('el panel y el CSV distinguen las firmas sin código', async () => {
+    const list = await (await ctx.request.get(`${BASE}/api/admin/signatures?period=all&q=27123456`)).json();
+    const detail = await (await ctx.request.get(`${BASE}/api/admin/signatures/${list.items[0].id}`)).json();
+    assert(detail.verification === 'none' && detail.status === 'verified', `Detalle inesperado: ${detail.verification} / ${detail.status}`);
+    const csv = (await (await ctx.request.get(`${BASE}/api/admin/export?event=all&period=all`)).body()).toString('utf8');
+    const row = csv.split('\n').find((l) => l.includes('27123456'));
+    // fputcsv entrecomilla los valores con espacios: ;"Sin código";
+    assert(row && /;"?Sin código"?;/.test(row), 'El CSV no marca la firma como «Sin código»');
+    assert(/;"?Código por correo"?;/.test(csv.split('\n').find((l) => l.includes(signer.doc))), 'El CSV no marca la firma verificada por correo');
+  });
+  await test('el evento original sigue pidiendo el código', async () => {
+    const ev = await (await ctx.request.get(`${BASE}/api/events/${eventSlug}`)).json();
+    assert(ev.requireEmailCode === true, 'El evento original perdió el código');
+  });
+
+  section('7. Seguridad');
   const anon = await browser.newContext();
   await test('peticiones sin la cabecera anti-CSRF se rechazan', async () => {
     const r = await ctx.request.post(`${BASE}/api/admin/events`, { data: { name: 'x' } });
@@ -524,7 +602,7 @@ async function main() {
     assert(r.status() === 422, `Respondió ${r.status()}`);
   });
 
-  section('7. Recuperación de contraseña');
+  section('8. Recuperación de contraseña');
   const NEW_PASS = 'NuevaClave2026!';
   let resetLink = '';
   let usedCode = '';
@@ -583,7 +661,7 @@ async function main() {
     assert(r.status() === 422, `El código reutilizado respondió ${r.status()}`);
   });
 
-  section('8. Diseño adaptable');
+  section('9. Diseño adaptable');
   await test('la página pública no se desborda en un celular', async () => {
     const m = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage();
     await m.goto(BASE + '/');

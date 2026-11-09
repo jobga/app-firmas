@@ -376,7 +376,7 @@ return [
             'fullName' => $s['full_name'], 'docType' => $s['doc_type'], 'docNumber' => $s['doc_number'], 'email' => $s['email'],
             'phone' => $s['phone'], 'birthDate' => $s['birth_date'], 'gender' => $s['gender'], 'department' => $s['department'], 'municipality' => $s['municipality'],
             'zone' => $s['zone'], 'ethnicGroup' => $s['ethnic_group'], 'pets' => $s['pets'], 'extra' => json_decode((string)$s['extra'], true),
-            'consentNews' => (bool)$s['consent_news'], 'signature' => $s['signature_png'], 'hash' => $s['hash'],
+            'consentNews' => (bool)$s['consent_news'], 'signature' => $s['signature_png'], 'hash' => $s['hash'], 'verification' => $s['verification'],
             'device' => $s['device'], 'ip' => $s['ip'],
             'createdAt' => Util::iso($s['created_at']), 'signedAt' => Util::iso($s['signed_at']), 'verifiedAt' => Util::iso($s['verified_at']),
         ];
@@ -387,7 +387,7 @@ return [
         [$where, $params] = signature_filter('s');
         if (($_GET['status'] ?? 'verified') === 'verified') $where .= " AND s.status = 'verified'";
         $st = Db::run("SELECT e.name evento, s.folio, s.status, s.full_name, s.doc_type, s.doc_number, s.email, s.phone, s.birth_date, s.gender,
-            s.department, s.municipality, s.zone, s.ethnic_group, s.pets, s.extra, s.consent_news, s.device, s.created_at, s.verified_at, s.hash
+            s.department, s.municipality, s.zone, s.ethnic_group, s.pets, s.extra, s.consent_news, s.device, s.created_at, s.verified_at, s.verification, s.hash
             FROM `#__signatures` s JOIN `#__events` e ON e.id = s.event_id WHERE $where ORDER BY s.created_at", $params);
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="firmas-' . date('Y-m-d') . '.csv"');
@@ -395,7 +395,7 @@ return [
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF"); // BOM para que Excel reconozca UTF-8
         fputcsv($out, ['Evento', 'Folio', 'Estado', 'Nombre', 'Tipo documento', 'Documento', 'Correo', 'Celular', 'Nacimiento', 'Género',
-            'Departamento', 'Municipio', 'Zona', 'Grupo étnico', 'Animales', 'Otros campos', 'Acepta información', 'Dispositivo', 'Registro (UTC)', 'Verificada (UTC)', 'Huella SHA-256'], ';');
+            'Departamento', 'Municipio', 'Zona', 'Grupo étnico', 'Animales', 'Otros campos', 'Acepta información', 'Dispositivo', 'Registro (UTC)', 'Verificada (UTC)', 'Verificación', 'Huella SHA-256'], ';');
         $labels = ['education' => 'Nivel educativo', 'disability' => 'Discapacidad'];
         foreach (Db::all('SELECT fields FROM `#__events`') as $ev) {
             foreach ((json_decode((string)$ev['fields'], true)['custom'] ?? []) as $c) $labels[$c['id']] = $c['label'];
@@ -406,6 +406,7 @@ return [
             $extra = array_filter(json_decode((string)$r['extra'], true) ?: [], fn($v) => $v !== null && $v !== '');
             $r['extra'] = implode('; ', array_map(fn($k, $v) => ($labels[$k] ?? $k) . ': ' . $v, array_keys($extra), $extra));
             $r['consent_news'] = $r['consent_news'] ? 'Sí' : 'No';
+            $r['verification'] = ['email' => 'Código por correo', 'none' => 'Sin código'][$r['verification'] ?? ''] ?? '';
             // Evita inyección de fórmulas en Excel.
             fputcsv($out, array_map(fn($v) => is_string($v) && preg_match('/^[=+\-@\t\r]/', $v) ? "'" . $v : $v, array_values($r)), ';');
         }

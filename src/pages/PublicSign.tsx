@@ -17,7 +17,9 @@ import './PublicSign.css';
 
 const LineField = lazy(() => import('../components/LineField'));
 
-const STEP_LABELS = ['Datos', 'Firma', 'Verificación', 'Listo'];
+// Pasos internos: 1 datos, 2 firma, 3 código por correo (solo si el evento lo pide), 4 listo.
+const STEPS_WITH_CODE: [number, string][] = [[1, 'Datos'], [2, 'Firma'], [3, 'Verificación'], [4, 'Listo']];
+const STEPS_WITHOUT_CODE: [number, string][] = [[1, 'Datos'], [2, 'Firma'], [4, 'Listo']];
 const DOC_TYPES = ['Cédula de ciudadanía', 'Cédula de extranjería', 'PEP / PPT', 'Pasaporte'];
 
 /** Casillas de opción múltiple; una opción «Ninguno» desmarca y deshabilita las demás. */
@@ -138,8 +140,9 @@ function SignFlow({ event }: { event: PublicEvent }) {
   const sendSignature = () => run(async () => {
     const image = sigRef.current?.toDataURL();
     if (!signed || !image) throw new ApiError(422, 'Dibuja tu firma dentro del recuadro.');
-    await post(`/signatures/${token}/sign`, { image });
-    setStep(3);
+    const r = await post<{ verified: true } & Receipt | { verified: false }>(`/signatures/${token}/sign`, { image });
+    if (r.verified) { setReceipt(r); setStep(4); }
+    else setStep(3);
   });
 
   const verify = () => run(async () => {
@@ -214,8 +217,8 @@ function SignFlow({ event }: { event: PublicEvent }) {
           ) : (
             <>
               <ol className="steps">
-                {STEP_LABELS.map((label, i) => (
-                  <li key={label} className={i + 1 <= step ? 'is-done' : undefined} aria-current={i + 1 === step ? 'step' : undefined}>
+                {(event.requireEmailCode ? STEPS_WITH_CODE : STEPS_WITHOUT_CODE).map(([n, label], i) => (
+                  <li key={label} className={n <= step ? 'is-done' : undefined} aria-current={n === step ? 'step' : undefined}>
                     <span className="steps__bar" />
                     <span className="steps__label">{i + 1}. {label}</span>
                   </li>
@@ -336,13 +339,17 @@ function SignFlow({ event }: { event: PublicEvent }) {
                     <button type="button" className="btn btn--outline" onClick={() => { sigRef.current?.clear(); setSigned(false); }}>Limpiar</button>
                     <div className="btn-row">
                       <button type="button" className="btn btn--ghost" onClick={() => setStep(1)}>Atrás</button>
-                      <button type="button" className="btn btn--primary" onClick={sendSignature} disabled={busy}>{busy ? 'Enviando…' : 'Enviar código a mi correo'}</button>
+                      <button type="button" className="btn btn--primary" onClick={sendSignature} disabled={busy}>{busy ? 'Enviando…' : event.requireEmailCode ? 'Enviar código a mi correo' : 'Firmar'}</button>
                     </div>
                   </div>
                   <p className="small muted">
-                    {signed
-                      ? 'Firma capturada. Al continuar, te enviaremos un código para confirmarla.'
-                      : 'La firma se guarda como imagen y queda pendiente hasta que verifiques el código.'}
+                    {event.requireEmailCode
+                      ? signed
+                        ? 'Firma capturada. Al continuar, te enviaremos un código para confirmarla.'
+                        : 'La firma se guarda como imagen y queda pendiente hasta que verifiques el código.'
+                      : signed
+                        ? 'Firma capturada. Al pulsar «Firmar» quedará registrada.'
+                        : 'La firma se guarda como imagen junto con tus datos.'}
                   </p>
                 </div>
               )}
@@ -372,11 +379,13 @@ function SignFlow({ event }: { event: PublicEvent }) {
                   <AnimalDrawing animal="cat" color={colors.button} label="Gato dibujado en una sola línea" style={{ width: 160, height: 160 }} />
                   <h2 className="step__title" style={{ fontSize: 28 }}>¡Gracias! Tu firma quedó registrada</h2>
                   <p style={{ fontSize: 15, lineHeight: 1.55, maxWidth: 420 }}>
-                    Recibirás en tu correo el comprobante con el folio, la fecha, la hora y la huella digital (hash) de tu firma.
+                    {event.sendReceipt
+                      ? 'Recibirás en tu correo el comprobante con el folio, la fecha, la hora y la huella digital (hash) de tu firma.'
+                      : 'Descarga ahora tu comprobante con el folio, la fecha, la hora y la huella digital (hash) de tu firma.'}
                   </p>
                   <div className="done__receipt">
                     <span><strong>Folio:</strong> {receipt.folio}</span>
-                    <span><strong>Verificada:</strong> {fmtDateTime(receipt.verifiedAt)}</span>
+                    <span><strong>{receipt.verification === 'none' ? 'Registrada' : 'Verificada'}:</strong> {fmtDateTime(receipt.verifiedAt)}</span>
                   </div>
                   <div className="btn-row btn-row--center">
                     <a href={apiUrl(`/receipts/${receipt.token ?? token}/pdf`)} className="btn btn--primary" download>Descargar comprobante</a>
