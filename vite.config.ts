@@ -11,7 +11,4 @@ export default defineConfig({
   server: {
     proxy: { '/api': php, '/install': php, '/uploads': php },
   },
-  build: {
-    chunkSizeWarningLimit: 800,
-  },
 });

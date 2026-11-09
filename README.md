@@ -8,7 +8,7 @@ Plataforma web para recoger firmas verificadas por correo, con caracterización 
 
 | Ruta | Pantalla |
 | --- | --- |
-| `/` y `/firma/<enlace>` | Registro público: datos → firma dibujada → código de 6 dígitos por correo → comprobante. El código por correo se puede desactivar en cada evento (*Eventos → Animación y verificación*); esas firmas quedan marcadas como «Sin código» |
+| `/` y `/firma/<enlace>` | Registro público: datos → firma dibujada → código de 6 dígitos por correo → comprobante. El código por correo se puede desactivar en cada evento (*Eventos → Verificación y comprobante*); esas firmas quedan marcadas como «Sin código» |
 | `/comprobante/<token>` | Comprobante en línea y en PDF (folio, fecha, huella SHA-256 y firma); el PDF también llega adjunto al correo |
 | `/admin/acceso` | Acceso de administrador con contraseña y verificación en dos pasos (QR TOTP + códigos de recuperación), y «¿Olvidaste tu contraseña?» por correo |
 | `/admin/restablecer/<token>` | Crear una contraseña nueva desde el enlace del correo (vence en 1 hora, un solo uso) |

@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS `#__events` (
   `background_path` VARCHAR(255) NULL,
   `fields` TEXT NULL,
   `municipalities` TEXT NULL,
+  -- animation e intensity: sin uso desde 1.3.1 (se quitó la animación de fondo); se conservan por compatibilidad.
   `animation` VARCHAR(30) NOT NULL DEFAULT 'both',
   `intensity` VARCHAR(20) NOT NULL DEFAULT 'subtle',
   `code_ttl_minutes` INT NOT NULL DEFAULT 10,
