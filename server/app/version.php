@@ -5,7 +5,7 @@
  * © Jonnathan Bucheli Galindo. Todos los derechos reservados.
  */
 const APP_NAME = 'Animalista · Plataforma de firmas';
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 /** Versión del esquema de base de datos. Súbela al agregar una migración en app/migrations.php. */
 const DB_VERSION = 4;
 const APP_AUTHOR = 'Jonnathan Bucheli Galindo';

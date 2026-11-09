@@ -52,3 +52,4 @@
 .verify-toggle__switch input { margin-top: 3px; flex: none; }
 .verify-toggle__options { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .verify-toggle__options:disabled { opacity: 0.5; }
+.verify-toggle--first { border-top: 0; padding-top: 0; }

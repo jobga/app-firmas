@@ -56,8 +56,6 @@ export type PublicEvent = {
   backgroundUrl: string | null;
   fields: { optional: Record<OptionalField, boolean>; custom: CustomField[] };
   municipalities: string[];
-  animation: 'both' | 'cats' | 'dogs' | 'off';
-  intensity: 'subtle' | 'medium' | 'high';
   codeTtlMinutes: number;
   /** Si es false, la firma se registra sin el código de verificación por correo. */
   requireEmailCode: boolean;

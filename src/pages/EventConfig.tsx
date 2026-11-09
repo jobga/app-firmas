@@ -29,7 +29,6 @@ type Draft = {
   name: string; slug: string; description: string; organization: string; policyUrl: string;
   opensAt: string; closesAt: string; goal: string; colors: EventColors;
   optional: Record<OptionalField, boolean>; custom: CustomField[]; municipalities: string;
-  animation: AdminEvent['animation']; intensity: AdminEvent['intensity'];
   codeTtlMinutes: number; maxAttempts: number; requireEmailCode: boolean; emailSubject: string; sendReceipt: boolean;
 };
 
@@ -44,7 +43,7 @@ const EMPTY: Draft = {
   colors: { bg: '#F7F6F2', title: '#161616', text: '#3D3B36', button: '#2C4BFF' },
   optional: { phone: true, birth_date: true, gender: true, municipality: true, zone: true, ethnic_group: true, pets: true, education: false, disability: false },
   custom: [], municipalities: 'Pasto\nIpiales\nTumaco\nTúquerres\nOtro',
-  animation: 'both', intensity: 'subtle', codeTtlMinutes: 10, maxAttempts: 3, requireEmailCode: true, emailSubject: 'Tu código para confirmar la firma', sendReceipt: true,
+  codeTtlMinutes: 10, maxAttempts: 3, requireEmailCode: true, emailSubject: 'Tu código para confirmar la firma', sendReceipt: true,
 };
 
 function fromEvent(e: AdminEvent): Draft {
@@ -52,7 +51,7 @@ function fromEvent(e: AdminEvent): Draft {
     name: e.name, slug: e.slug, description: e.description, organization: e.organization, policyUrl: e.policyUrl,
     opensAt: toLocalInput(e.opensAt), closesAt: toLocalInput(e.closesAt), goal: e.goal ? String(e.goal) : '',
     colors: e.colors, optional: e.fields.optional, custom: e.fields.custom, municipalities: e.municipalities.join('\n'),
-    animation: e.animation, intensity: e.intensity, codeTtlMinutes: e.codeTtlMinutes, maxAttempts: e.maxAttempts,
+    codeTtlMinutes: e.codeTtlMinutes, maxAttempts: e.maxAttempts,
     requireEmailCode: e.requireEmailCode, emailSubject: e.emailSubject, sendReceipt: e.sendReceipt,
   };
 }
@@ -89,7 +88,7 @@ export function EventConfig() {
       closesAt: draft.closesAt ? new Date(draft.closesAt).toISOString() : '', goal: draft.goal ? Number(draft.goal) : null,
       colors, fields: { optional: draft.optional, custom: draft.custom },
       municipalities: draft.municipalities.split('\n').map((m) => m.trim()).filter(Boolean),
-      animation: draft.animation, intensity: draft.intensity, codeTtlMinutes: draft.codeTtlMinutes, maxAttempts: draft.maxAttempts,
+      codeTtlMinutes: draft.codeTtlMinutes, maxAttempts: draft.maxAttempts,
       requireEmailCode: draft.requireEmailCode, emailSubject: draft.emailSubject, sendReceipt: draft.sendReceipt,
     };
     try {
@@ -264,21 +263,9 @@ export function EventConfig() {
           </section>
 
           <section className="card card--roomy">
-            <h2 className="card-title card-title--lg">Animación y verificación</h2>
-            <div className="grid-4">
-              <label className="lbl">Animación Three.js
-                <select className="field" value={draft.animation} onChange={(e) => set('animation', e.target.value as Draft['animation'])}>
-                  <option value="both">Perros y gatos de un trazo</option><option value="cats">Solo gatos</option><option value="dogs">Solo perros</option><option value="off">Desactivada</option>
-                </select>
-              </label>
-              <label className="lbl">Intensidad
-                <select className="field" value={draft.intensity} onChange={(e) => set('intensity', e.target.value as Draft['intensity'])}>
-                  <option value="subtle">Sutil</option><option value="medium">Media</option><option value="high">Alta</option>
-                </select>
-              </label>
-            </div>
+            <h2 className="card-title card-title--lg">Verificación y comprobante</h2>
 
-            <div className="verify-toggle">
+            <div className="verify-toggle verify-toggle--first">
               <label className="check-row verify-toggle__switch">
                 <input type="checkbox" checked={draft.requireEmailCode} onChange={(e) => set('requireEmailCode', e.target.checked)} />
                 <span><strong>Solicitar código de verificación por correo</strong><br />

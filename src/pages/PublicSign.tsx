@@ -2,7 +2,7 @@
  * Página pública: datos → firma dibujada → código por correo → comprobante.
  * Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo
  */
-import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, fmtDate, fmtDateTime, fmtNumber, get, post, type PublicEvent, type Receipt } from '../lib/api';
 import { useAsync } from '../lib/useAsync';
@@ -13,8 +13,6 @@ import { CodeInput } from '../components/CodeInput';
 import { Alert } from '../components/Alert';
 import { SignaturePad, type SignaturePadHandle } from '../components/SignaturePad';
 import './PublicSign.css';
-
-const LineField = lazy(() => import('../components/LineField'));
 
 // Pasos internos: 1 datos, 2 firma, 3 código por correo (solo si el evento lo pide), 4 listo.
 const STEPS_WITH_CODE: [number, string][] = [[1, 'Datos'], [2, 'Firma'], [3, 'Verificación'], [4, 'Listo']];
@@ -138,11 +136,6 @@ function SignFlow({ event }: { event: PublicEvent }) {
 
   return (
     <div className="pub" style={themeVars}>
-      {event.animation !== 'off' && (
-        <Suspense fallback={null}>
-          <LineField animation={event.animation} intensity={event.intensity} catColor={colors.title} dogColor={colors.button} />
-        </Suspense>
-      )}
       <header className="pub__header">
         <div className="pub__org">
           <div className="pub__logo">
