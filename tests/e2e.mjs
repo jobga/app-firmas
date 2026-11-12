@@ -115,6 +115,27 @@ async function fillCode(page, code) {
   for (let i = 0; i < 6; i++) await boxes.nth(i).fill(code[i]);
 }
 
+/** Completa el formulario público y firma; si el evento pide código, lo lee del buzón de prueba. */
+async function signThroughUI(page, url, person) {
+  await page.goto(url);
+  await page.waitForSelector('text=Tus datos');
+  await page.fill('[name=fullName]', person.name); await page.fill('[name=docNumber]', person.doc); await page.fill('[name=email]', person.email);
+  await page.fill('[name=birthDate]', '1995-02-02'); await page.selectOption('[name=gender]', 'Masculino'); await page.selectOption('[name=municipality]', 'Pasto');
+  await page.check('[name=consentData]');
+  await page.click('text=Continuar a la firma');
+  await page.waitForSelector('text=Dibuja tu firma');
+  const box = await page.locator('canvas[aria-label="Área para dibujar la firma"]').boundingBox();
+  await page.mouse.move(box.x + 70, box.y + 120); await page.mouse.down();
+  for (let i = 0; i < 25; i++) await page.mouse.move(box.x + 70 + i * 14, box.y + 120 + Math.sin(i / 2) * 30);
+  await page.mouse.up();
+  await page.click('.step button.btn--primary');
+  if (await page.waitForSelector('text=Confirma tu firma', { timeout: 3000 }).catch(() => null)) {
+    await fillCode(page, await lastCode(person.email));
+    await page.click('text=Verificar y firmar');
+  }
+  await page.waitForSelector('.done__receipt');
+}
+
 // ---------- Pruebas ----------
 async function main() {
   await new Promise((r) => smtp.listen(2525, '127.0.0.1', r));
@@ -480,7 +501,110 @@ async function main() {
     assert(ev.requireEmailCode === true, 'El evento original perdió el código');
   });
 
-  section('7. Seguridad');
+  section('7. Personalización del evento');
+  let customSlug = '';
+  const toLocal = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  await test('fechas: se pueden programar o no, y mostrar u ocultar', async () => {
+    await page.goto(BASE + '/admin/eventos/nuevo');
+    await page.waitForSelector('text=Nuevo evento');
+    await page.fill('label:has-text("Nombre del evento") input', 'Evento personalizado');
+    await page.fill('label:has-text("Descripción") textarea', 'Descripción del evento personalizado.');
+    const dates = page.locator('input[type=datetime-local]');
+    assert(await dates.count() === 0, 'Las fechas deberían estar ocultas mientras no se programen');
+    await page.check('label:has-text("Programar fechas de apertura y cierre") input');
+    await dates.nth(0).fill(toLocal(new Date(Date.now() - 86400000)));
+    await dates.nth(1).fill(toLocal(new Date(Date.now() + 30 * 86400000)));
+    assert(await page.locator('label:has-text("Mostrar las fechas en la página pública") input').isChecked(), 'Mostrar fechas debería venir activado');
+  });
+  await test('colores del formulario con aviso de contraste', async () => {
+    const color = (label, v) => page.locator(`.swatch input[aria-label="${label}"]`).fill(v);
+    await color('Fondo del formulario', '#1f2937'); await color('Títulos del formulario', '#ffffff'); await color('Texto del formulario', '#e5e7eb');
+    await color('Fondo de los campos', '#374151'); await color('Borde de los campos', '#9ca3af');
+    await page.waitForSelector('text=Contraste accesible: texto sobre el formulario');
+    await color('Texto del formulario', '#2a2a2a');
+    await page.waitForSelector('text=Contraste bajo (texto sobre el formulario');
+    await color('Texto del formulario', '#e5e7eb');
+  });
+  await test('textos de autorización editables y segunda casilla opcional', async () => {
+    await page.fill('label:has-text("Autorización de tratamiento de datos") textarea', 'Acepto que la {politica} rija el uso de mis datos en este pacto.');
+    await page.uncheck('label:has-text("Mostrar una segunda casilla") input');
+    assert(await page.locator('label:has-text("Texto de la segunda casilla") textarea').isDisabled(), 'El texto de la segunda casilla debería quedar deshabilitado');
+  });
+  await test('título y mensaje de agradecimiento configurables', async () => {
+    await page.fill('input[placeholder="¡Gracias! Tu firma quedó registrada"]', '¡Gracias por sumarte!');
+    await page.fill('textarea[placeholder^="Recibirás en tu correo"]', 'Tu firma ya cuenta.\nCompártela con tu familia.');
+    await page.waitForSelector('.preview__thanks strong:has-text("¡Gracias por sumarte!")');
+    await page.click('button:has-text("Publicar evento")');
+    await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
+    customSlug = await page.inputValue('.slug-field input');
+  });
+  await test('banner: se sube y se coloca encima de la descripción', async () => {
+    await page.setInputFiles('.drop--wide input[type=file]', { name: 'banner.png', mimeType: 'image/png', buffer: Buffer.from(PNG.split(',')[1], 'base64') });
+    await page.waitForSelector('.alert--ok:has-text("Banner actualizado")');
+    await page.selectOption('label:has-text("Posición") select', 'above');
+    await page.fill('label:has-text("Texto alternativo") input', 'Perros y gatos del pacto');
+    await page.click('button:has-text("Guardar cambios")');
+    await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
+    await page.screenshot({ path: `${SHOTS}/10-evento-personalizado.png`, fullPage: true });
+  });
+  await test('la página pública aplica banner, fechas, colores y textos', async () => {
+    const v = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
+    v.on('pageerror', (e) => consoleErrors.push('personalizado: ' + e.message));
+    await v.goto(`${BASE}/firma/${customSlug}`);
+    await v.waitForSelector('text=Tus datos');
+    const order = await v.evaluate(() => {
+      const b = document.querySelector('.pub__banner'), d = document.querySelector('.pub__desc');
+      return b && d ? (b.compareDocumentPosition(d) & Node.DOCUMENT_POSITION_FOLLOWING ? 'encima' : 'debajo') : 'falta';
+    });
+    assert(order === 'encima', `Banner ${order}`);
+    assert(await v.getAttribute('.pub__banner img', 'alt') === 'Perros y gatos del pacto', 'Falta el texto alternativo del banner');
+    await v.waitForSelector('text=apertura de la convocatoria');
+    await v.waitForSelector('text=cierre de la convocatoria');
+    const bg = await v.$eval('.pub__panel', (el) => getComputedStyle(el).backgroundColor);
+    const fieldBg = await v.$eval('[name=fullName]', (el) => getComputedStyle(el).backgroundColor);
+    assert(bg === 'rgb(31, 41, 55)' && fieldBg === 'rgb(55, 65, 81)', `Colores del formulario no aplicados: ${bg} / ${fieldBg}`);
+    const titleColor = await v.$eval('.step__title', (el) => getComputedStyle(el).color);
+    const inputColor = await v.$eval('[name=fullName]', (el) => getComputedStyle(el).color);
+    assert(titleColor === 'rgb(255, 255, 255)' && inputColor === 'rgb(255, 255, 255)', `Títulos/campos: ${titleColor} / ${inputColor}`);
+    const consent = await v.textContent('#politica');
+    assert(consent.includes('Acepto que la Política de tratamiento de datos rija el uso de mis datos en este pacto.'), `Texto de autorización: ${consent}`);
+    assert(await v.locator('[name=consentNews]').count() === 0, 'La segunda casilla debería estar oculta');
+    await v.screenshot({ path: `${SHOTS}/11-publica-personalizada.png`, fullPage: true });
+  });
+  await test('el mensaje de agradecimiento aparece al terminar y se guarda el texto aceptado', async () => {
+    const v = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
+    await signThroughUI(v, `${BASE}/firma/${customSlug}`, { name: 'Tomás Guerrero', doc: '98765432', email: 'tomas@example.com' });
+    await v.waitForSelector('h2:has-text("¡Gracias por sumarte!")');
+    const msg = await v.textContent('.done__message');
+    assert(msg === 'Tu firma ya cuenta.\nCompártela con tu familia.', `Mensaje: ${JSON.stringify(msg)}`);
+    await v.screenshot({ path: `${SHOTS}/12-gracias-personalizado.png`, fullPage: true });
+    const list = await (await ctx.request.get(`${BASE}/api/admin/signatures?period=all&q=98765432`)).json();
+    const d = await (await ctx.request.get(`${BASE}/api/admin/signatures/${list.items[0].id}`)).json();
+    assert(d.consentText === 'Acepto que la Política de tratamiento de datos rija el uso de mis datos en este pacto.', `Texto guardado: ${d.consentText}`);
+    assert(d.consentNews === false, 'Con la segunda casilla oculta no debería registrarse aceptación');
+  });
+  await test('desactivar fechas, banner y agradecimiento los quita de la página', async () => {
+    await page.uncheck('label:has-text("Mostrar las fechas en la página pública") input');
+    await page.uncheck('label:has-text("Mostrar el banner en la página pública") input');
+    await page.uncheck('label:has-text("Mostrar título y mensaje al terminar la firma") input');
+    await page.click('button:has-text("Guardar cambios")');
+    await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
+    const v = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
+    await signThroughUI(v, `${BASE}/firma/${customSlug}`, { name: 'Valeria Ortiz', doc: '55667788', email: 'valeria@example.com' });
+    assert(await v.locator('.pub__banner').count() === 0, 'El banner sigue visible');
+    assert(await v.locator('text=cierre de la convocatoria').count() === 0, 'Las fechas siguen visibles');
+    assert(await v.locator('.done h2').count() === 0 && await v.locator('.done__message').count() === 0, 'El agradecimiento sigue visible');
+    assert((await v.textContent('.done__receipt')).includes('Folio:'), 'Falta el folio en la pantalla final');
+  });
+  await test('sin programar fechas, el evento no guarda apertura ni cierre', async () => {
+    await page.uncheck('label:has-text("Programar fechas de apertura y cierre") input');
+    await page.click('button:has-text("Guardar cambios")');
+    await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
+    const ev = await (await ctx.request.get(`${BASE}/api/events/${customSlug}`)).json();
+    assert(ev.opensAt === null && ev.closesAt === null && ev.isOpen === true, `Fechas: ${ev.opensAt} / ${ev.closesAt}`);
+  });
+
+  section('8. Seguridad');
   const anon = await browser.newContext();
   await test('peticiones sin la cabecera anti-CSRF se rechazan', async () => {
     const r = await ctx.request.post(`${BASE}/api/admin/events`, { data: { name: 'x' } });
@@ -532,7 +656,7 @@ async function main() {
     assert(r.status() === 422, `Respondió ${r.status()}`);
   });
 
-  section('8. Recuperación de contraseña');
+  section('9. Recuperación de contraseña');
   const NEW_PASS = 'NuevaClave2026!';
   let resetLink = '';
   let usedCode = '';
@@ -591,7 +715,7 @@ async function main() {
     assert(r.status() === 422, `El código reutilizado respondió ${r.status()}`);
   });
 
-  section('9. Diseño adaptable');
+  section('10. Diseño adaptable');
   await test('la página pública no se desborda en un celular', async () => {
     const m = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage();
     await m.goto(BASE + '/');

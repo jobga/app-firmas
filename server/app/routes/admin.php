@@ -231,6 +231,7 @@ return [
         $rules = [
             'logo' => ['col' => 'logo_path', 'max' => 1024 * 1024, 'types' => ['image/png' => 'png', 'image/svg+xml' => 'svg']],
             'background' => ['col' => 'background_path', 'max' => 4 * 1024 * 1024, 'types' => ['image/jpeg' => 'jpg', 'image/webp' => 'webp']],
+            'banner' => ['col' => 'banner_path', 'max' => 3 * 1024 * 1024, 'types' => ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp']],
         ];
         if (!isset($rules[$kind])) throw new HttpError(422, 'Tipo de archivo no válido');
         $r = $rules[$kind];
@@ -260,7 +261,7 @@ return [
     ['DELETE', '/admin/events/{id}/upload', function ($p) {
         Auth::admin();
         $e = admin_event($p['id']);
-        $col = ($_GET['kind'] ?? '') === 'logo' ? 'logo_path' : 'background_path';
+        $col = ['logo' => 'logo_path', 'background' => 'background_path', 'banner' => 'banner_path'][$_GET['kind'] ?? ''] ?? throw new HttpError(422, 'Tipo de archivo no válido');
         if ($e[$col] && is_file(ROOT_DIR . '/' . $e[$col])) @unlink(ROOT_DIR . '/' . $e[$col]);
         Db::update('events', [$col => null], 'id = ?', [$e['id']]);
         return event_admin(admin_event($p['id']));
@@ -367,7 +368,7 @@ return [
             'fullName' => $s['full_name'], 'docType' => $s['doc_type'], 'docNumber' => $s['doc_number'], 'email' => $s['email'],
             'phone' => $s['phone'], 'birthDate' => $s['birth_date'], 'gender' => $s['gender'], 'municipality' => $s['municipality'],
             'zone' => $s['zone'], 'ethnicGroup' => $s['ethnic_group'], 'pets' => $s['pets'], 'extra' => json_decode((string)$s['extra'], true),
-            'consentNews' => (bool)$s['consent_news'], 'signature' => $s['signature_png'], 'hash' => $s['hash'], 'verification' => $s['verification'],
+            'consentNews' => (bool)$s['consent_news'], 'consentText' => $s['consent_text'], 'signature' => $s['signature_png'], 'hash' => $s['hash'], 'verification' => $s['verification'],
             'device' => $s['device'], 'ip' => $s['ip'],
             'createdAt' => Util::iso($s['created_at']), 'signedAt' => Util::iso($s['signed_at']), 'verifiedAt' => Util::iso($s['verified_at']),
         ];

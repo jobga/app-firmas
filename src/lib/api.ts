@@ -36,7 +36,10 @@ export const put = <T>(p: string, b: unknown) => api<T>(p, 'PUT', b);
 export const del = <T>(p: string, b?: unknown) => api<T>(p, 'DELETE', b ?? {});
 
 // ---------- Tipos ----------
-export type EventColors = { bg: string; title: string; text: string; button: string };
+export type EventColors = {
+  bg: string; title: string; text: string; button: string;
+  formBg: string; formTitle: string; formText: string; fieldBg: string; fieldBorder: string;
+};
 export type OptionalField = 'phone' | 'birth_date' | 'gender' | 'municipality' | 'zone' | 'ethnic_group' | 'pets' | 'education' | 'disability';
 export type CustomField = { id?: string; label: string; required: boolean };
 
@@ -50,10 +53,19 @@ export type PublicEvent = {
   policyUrl: string;
   opensAt: string | null;
   closesAt: string | null;
+  /** Mostrar las fechas de apertura y cierre en la página pública. */
+  showDates: boolean;
   goal: number | null;
   colors: EventColors;
   logoUrl: string | null;
   backgroundUrl: string | null;
+  banner: { url: string; position: 'above' | 'below'; alt: string } | null;
+  /** Texto de autorización de datos; {politica} se convierte en el enlace a la política. */
+  consentDataText: string;
+  consentNewsEnabled: boolean;
+  consentNewsText: string;
+  /** title/message en null = textos predeterminados. */
+  thanks: { enabled: boolean; title: string | null; message: string | null };
   fields: { optional: Record<OptionalField, boolean>; custom: CustomField[] };
   municipalities: string[];
   codeTtlMinutes: number;
@@ -66,6 +78,10 @@ export type PublicEvent = {
 
 export type AdminEvent = PublicEvent & {
   maxAttempts: number;
+  bannerUrl: string | null;
+  bannerEnabled: boolean;
+  bannerPosition: 'above' | 'below';
+  bannerAlt: string;
   emailSubject: string;
   createdAt: string;
   updatedAt: string;
@@ -110,7 +126,7 @@ export type SignatureRow = {
 export type SignatureDetail = {
   id: number; folio: string | null; status: SignatureStatus; event: string; fullName: string; docType: string; docNumber: string;
   email: string; phone: string | null; birthDate: string | null; gender: string | null; municipality: string | null; zone: string | null;
-  ethnicGroup: string | null; pets: string | null; extra: Record<string, string | null> | null; consentNews: boolean;
+  ethnicGroup: string | null; pets: string | null; extra: Record<string, string | null> | null; consentNews: boolean; consentText: string | null;
   signature: string | null; hash: string | null; verification: 'email' | 'none' | null; device: string | null; ip: string | null;
   createdAt: string; signedAt: string | null; verifiedAt: string | null;
 };
@@ -124,3 +140,10 @@ export const fmtNumber = (n: number) => n.toLocaleString('es-CO');
 export const fmtDateTime = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 export const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('es-CO', { dateStyle: 'long' }) : '—');
+
+export const DEFAULT_CONSENT_DATA = 'Autorizo de manera libre, previa, expresa e informada el tratamiento de mis datos personales según la Ley 1581 de 2012 y la {politica} del evento.';
+export const DEFAULT_CONSENT_NEWS = 'Acepto recibir información sobre los resultados de esta convocatoria.';
+export const DEFAULT_THANKS_TITLE = '¡Gracias! Tu firma quedó registrada';
+export const defaultThanksMessage = (sendReceipt: boolean) => sendReceipt
+  ? 'Recibirás en tu correo el comprobante con el folio, la fecha, la hora y la huella digital (hash) de tu firma.'
+  : 'Descarga ahora tu comprobante con el folio, la fecha, la hora y la huella digital (hash) de tu firma.';

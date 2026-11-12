@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ApiError, fmtDate, fmtDateTime, fmtNumber, get, post, type PublicEvent, type Receipt } from '../lib/api';
+import { ApiError, DEFAULT_THANKS_TITLE, defaultThanksMessage, fmtDate, fmtDateTime, fmtNumber, get, post, type PublicEvent, type Receipt } from '../lib/api';
 import { useAsync } from '../lib/useAsync';
 import { absoluteUrl, apiUrl } from '../lib/base';
 import { AnimalDrawing, CatAndDog, CatMark } from '../components/LineArt';
@@ -23,6 +23,28 @@ const ETHNIC = ['Ninguno', 'Indígena', 'Afrocolombiano', 'Raizal', 'Palenquero'
 const EDUCATION = ['Primaria', 'Secundaria', 'Técnico o tecnólogo', 'Universitario', 'Posgrado', 'Ninguno'];
 const PETS = ['Perros', 'Gatos', 'Otros', 'Ninguno'];
 const NO_PETS = 'Ninguno';
+
+/** Texto de autorización: {politica} se convierte en el enlace a la política del evento. */
+export function ConsentText({ text, policyUrl }: { text: string; policyUrl: string }) {
+  const parts = text.split('{politica}');
+  return (
+    <>
+      {parts.map((p, i) => (
+        <span key={i}>
+          {p}
+          {i < parts.length - 1 && (policyUrl
+            ? <a href={policyUrl} target="_blank" rel="noreferrer">Política de tratamiento de datos</a>
+            : 'Política de tratamiento de datos')}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** Banner opcional del evento, encima o debajo de la descripción. */
+function Banner({ banner }: { banner: NonNullable<PublicEvent['banner']> }) {
+  return <figure className="pub__banner"><img src={banner.url} alt={banner.alt} /></figure>;
+}
 
 function maskEmail(email: string) {
   const at = email.indexOf('@');
@@ -131,6 +153,7 @@ function SignFlow({ event }: { event: PublicEvent }) {
 
   const themeVars = {
     '--ev-bg': colors.bg, '--ev-title': colors.title, '--ev-text': colors.text, '--ev-button': colors.button, '--btn-bg': colors.button,
+    '--form-bg': colors.formBg, '--form-title': colors.formTitle, '--form-text': colors.formText, '--field-bg': colors.fieldBg, '--field-border': colors.fieldBorder,
     ...(event.backgroundUrl ? { backgroundImage: `linear-gradient(${colors.bg}e6, ${colors.bg}e6), url("${event.backgroundUrl}")` } : {}),
   } as CSSProperties;
 
@@ -153,10 +176,13 @@ function SignFlow({ event }: { event: PublicEvent }) {
         <section className="pub__intro">
           <span className="pub__badge">Recolección de firmas · {event.isOpen ? 'abierta' : 'cerrada'}</span>
           <h1 className="pub__title">{event.name}</h1>
+          {event.banner?.position === 'above' && <Banner banner={event.banner} />}
           {event.description && <p className="pub__desc">{event.description}</p>}
+          {event.banner?.position === 'below' && <Banner banner={event.banner} />}
           <div className="pub__stats">
             <div className="pub__stat"><strong>{fmtNumber(event.verifiedCount)}</strong>firmas verificadas{event.goal ? ` de ${fmtNumber(event.goal)}` : ''}</div>
-            {event.closesAt && <div className="pub__stat"><strong>{fmtDate(event.closesAt)}</strong>cierre de la convocatoria</div>}
+            {event.showDates && event.opensAt && <div className="pub__stat"><strong>{fmtDate(event.opensAt)}</strong>apertura de la convocatoria</div>}
+            {event.showDates && event.closesAt && <div className="pub__stat"><strong>{fmtDate(event.closesAt)}</strong>cierre de la convocatoria</div>}
           </div>
           {progress !== null && (
             <div className="pub__goal" role="progressbar" aria-label="Avance hacia la meta" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}>
@@ -263,13 +289,14 @@ function SignFlow({ event }: { event: PublicEvent }) {
                   <div id="politica" className="consent">
                     <label>
                       <input type="checkbox" name="consentData" required />
-                      <span>Autorizo de manera libre, previa, expresa e informada el tratamiento de mis datos personales según la Ley 1581 de 2012 y la{' '}
-                        {event.policyUrl ? <a href={event.policyUrl} target="_blank" rel="noreferrer">Política de tratamiento de datos</a> : 'Política de tratamiento de datos'} del evento. *</span>
+                      <span><ConsentText text={event.consentDataText} policyUrl={event.policyUrl} /> *</span>
                     </label>
-                    <label>
-                      <input type="checkbox" name="consentNews" />
-                      <span>Acepto recibir información sobre los resultados de esta convocatoria.</span>
-                    </label>
+                    {event.consentNewsEnabled && (
+                      <label>
+                        <input type="checkbox" name="consentNews" />
+                        <span>{event.consentNewsText}</span>
+                      </label>
+                    )}
                   </div>
                   <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={busy}>{busy ? 'Guardando…' : 'Continuar a la firma'}</button>
                 </form>
@@ -324,12 +351,12 @@ function SignFlow({ event }: { event: PublicEvent }) {
               {step === 4 && receipt && (
                 <div className="step done rise">
                   <AnimalDrawing animal="cat" color={colors.button} label="Gato dibujado en una sola línea" style={{ width: 160, height: 160 }} />
-                  <h2 className="step__title" style={{ fontSize: 28 }}>¡Gracias! Tu firma quedó registrada</h2>
-                  <p style={{ fontSize: 15, lineHeight: 1.55, maxWidth: 420 }}>
-                    {event.sendReceipt
-                      ? 'Recibirás en tu correo el comprobante con el folio, la fecha, la hora y la huella digital (hash) de tu firma.'
-                      : 'Descarga ahora tu comprobante con el folio, la fecha, la hora y la huella digital (hash) de tu firma.'}
-                  </p>
+                  {event.thanks.enabled && (
+                    <>
+                      <h2 className="step__title" style={{ fontSize: 28 }}>{event.thanks.title ?? DEFAULT_THANKS_TITLE}</h2>
+                      <p className="done__message">{event.thanks.message ?? defaultThanksMessage(event.sendReceipt)}</p>
+                    </>
+                  )}
                   <div className="done__receipt">
                     <span><strong>Folio:</strong> {receipt.folio}</span>
                     <span><strong>{receipt.verification === 'none' ? 'Registrada' : 'Verificada'}:</strong> {fmtDateTime(receipt.verifiedAt)}</span>
