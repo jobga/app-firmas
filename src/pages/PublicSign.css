@@ -19,7 +19,7 @@
 .pub__stat strong { font-family: var(--font-display); font-size: 28px; font-weight: 500; color: var(--ev-title); }
 
 .pub__panel {
-  flex: 1 1 520px; max-width: 640px; min-width: 0; background: #fff; border: 1px solid var(--line);
+  flex: 1 1 520px; max-width: 640px; min-width: 0; background: var(--form-bg, #fff); color: var(--form-text, inherit); border: 1px solid var(--line);
   border-radius: 24px; padding: clamp(20px, 4vw, 40px); display: flex; flex-direction: column; gap: 28px;
   box-shadow: var(--shadow-lift);
 }
@@ -56,3 +56,21 @@
 .pub__goal { height: 8px; max-width: 460px; border-radius: 6px; background: rgba(0, 0, 0, 0.08); overflow: hidden; }
 .pub__goal div { height: 100%; background: var(--ev-button); border-radius: 6px; }
 .pub__empty { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 24px; }
+
+/* Colores del formulario configurables por evento */
+.pub__panel { --form-muted: color-mix(in srgb, var(--form-text, #3D3B36) 78%, var(--form-bg, #fff)); --form-soft: color-mix(in srgb, var(--form-text, #3D3B36) 7%, var(--form-bg, #fff)); }
+.pub__panel .step__title { color: var(--form-title, var(--ev-title)); }
+.pub__panel .step__sub, .pub__panel .lbl, .pub__panel legend, .pub__panel .chip { color: var(--form-text, inherit); }
+.pub__panel .field, .pub__panel .code { background: var(--field-bg, #fff); border-color: var(--field-border, var(--line-input)); color: var(--form-title, var(--ink)); }
+.pub__panel .field:focus, .pub__panel .code:focus { border-color: var(--ev-button); }
+.pub__panel .chip, .pub__panel .icon-tile { border-color: var(--field-border, var(--line-input)); }
+.pub__panel .consent, .pub__panel .done__receipt { background: var(--form-soft); }
+.pub__panel .muted, .pub__panel .pub__secure, .pub__panel .steps__label { color: var(--form-muted); }
+.pub__panel .steps li[aria-current='step'] .steps__label { color: var(--form-title, var(--ink)); }
+.pub__panel .steps__bar { background: color-mix(in srgb, var(--form-text, #3D3B36) 18%, var(--form-bg, #fff)); }
+.pub__panel .steps li.is-done .steps__bar { background: var(--ev-button); }
+.pub__panel .pub__secure { border-top-color: color-mix(in srgb, var(--form-text, #3D3B36) 12%, var(--form-bg, #fff)); }
+.pub__panel .btn--ghost { color: var(--form-title, var(--ink)); }
+.pub__banner { margin: 0; border-radius: 18px; overflow: hidden; max-width: 560px; box-shadow: var(--shadow-lift); }
+.pub__banner img { display: block; width: 100%; height: auto; max-height: 340px; object-fit: cover; }
+.done__message { font-size: 15px; line-height: 1.55; max-width: 440px; white-space: pre-line; }

@@ -13,7 +13,34 @@ const OPTIONAL_FIELDS = [
     'disability' => 'Discapacidad',
 ];
 
-const DEFAULT_COLORS = ['bg' => '#F7F6F2', 'title' => '#161616', 'text' => '#3D3B36', 'button' => '#2C4BFF'];
+const DEFAULT_COLORS = [
+    // Página
+    'bg' => '#F7F6F2', 'title' => '#161616', 'text' => '#3D3B36', 'button' => '#2C4BFF',
+    // Formulario
+    'formBg' => '#FFFFFF', 'formTitle' => '#161616', 'formText' => '#3D3B36', 'fieldBg' => '#FFFFFF', 'fieldBorder' => '#CFCCC4',
+];
+
+/** Colores del evento; los eventos anteriores a 1.4 heredan en el formulario los colores de títulos y texto de la página. */
+function event_colors(array $e): array
+{
+    $stored = json_decode((string)$e['colors'], true) ?: [];
+    $c = array_merge(DEFAULT_COLORS, $stored);
+    if (!isset($stored['formTitle'])) $c['formTitle'] = $c['title'];
+    if (!isset($stored['formText'])) $c['formText'] = $c['text'];
+    return $c;
+}
+/** {politica} se convierte en el enlace a la política de tratamiento de datos del evento. */
+const DEFAULT_CONSENT_DATA = 'Autorizo de manera libre, previa, expresa e informada el tratamiento de mis datos personales según la Ley 1581 de 2012 y la {politica} del evento.';
+const DEFAULT_CONSENT_NEWS = 'Acepto recibir información sobre los resultados de esta convocatoria.';
+const DEFAULT_THANKS_TITLE = '¡Gracias! Tu firma quedó registrada';
+const DEFAULT_THANKS_MESSAGE = 'Recibirás en tu correo el comprobante con el folio, la fecha, la hora y la huella digital (hash) de tu firma.';
+
+/** Texto de autorización de datos tal como lo lee el firmante (sin el marcador {politica}). */
+function consent_data_plain(array $e): string
+{
+    $t = trim((string)($e['consent_data_text'] ?? '')) ?: DEFAULT_CONSENT_DATA;
+    return str_replace('{politica}', 'Política de tratamiento de datos', $t);
+}
 const DEFAULT_MUNICIPALITIES = ['Pasto', 'Ipiales', 'Tumaco', 'Túquerres', 'Otro'];
 
 /**
@@ -113,10 +140,23 @@ function event_public(array $e): array
         'policyUrl' => (string)$e['policy_url'],
         'opensAt' => Util::iso($e['opens_at']),
         'closesAt' => Util::iso($e['closes_at']),
+        'showDates' => (bool)($e['show_dates'] ?? true),
         'goal' => $e['goal'] !== null ? (int)$e['goal'] : null,
-        'colors' => array_merge(DEFAULT_COLORS, json_decode((string)$e['colors'], true) ?: []),
+        'colors' => event_colors($e),
         'logoUrl' => $e['logo_path'] ? $base . '/' . $e['logo_path'] : null,
         'backgroundUrl' => $e['background_path'] ? $base . '/' . $e['background_path'] : null,
+        'banner' => !empty($e['banner_path']) && !empty($e['banner_enabled'])
+            ? ['url' => $base . '/' . $e['banner_path'], 'position' => $e['banner_position'] === 'above' ? 'above' : 'below', 'alt' => (string)$e['banner_alt']]
+            : null,
+        'consentDataText' => trim((string)($e['consent_data_text'] ?? '')) ?: DEFAULT_CONSENT_DATA,
+        'consentNewsEnabled' => (bool)($e['consent_news_enabled'] ?? true),
+        'consentNewsText' => trim((string)($e['consent_news_text'] ?? '')) ?: DEFAULT_CONSENT_NEWS,
+        'thanks' => [
+            'enabled' => (bool)($e['thanks_enabled'] ?? true),
+            // null = texto predeterminado (el navegador lo adapta según se envíe o no el comprobante).
+            'title' => trim((string)($e['thanks_title'] ?? '')) ?: null,
+            'message' => trim((string)($e['thanks_message'] ?? '')) ?: null,
+        ],
         'fields' => $fields,
         'municipalities' => json_decode((string)$e['municipalities'], true) ?: DEFAULT_MUNICIPALITIES,
         'codeTtlMinutes' => (int)$e['code_ttl_minutes'],
@@ -131,6 +171,10 @@ function event_admin(array $e): array
 {
     return event_public($e) + [
         'maxAttempts' => (int)$e['max_attempts'],
+        'bannerUrl' => !empty($e['banner_path']) ? app_base_path() . '/' . $e['banner_path'] : null,
+        'bannerEnabled' => (bool)($e['banner_enabled'] ?? true),
+        'bannerPosition' => ($e['banner_position'] ?? 'below') === 'above' ? 'above' : 'below',
+        'bannerAlt' => (string)($e['banner_alt'] ?? ''),
         'emailSubject' => $e['email_subject'],
         'createdAt' => Util::iso($e['created_at']),
         'updatedAt' => Util::iso($e['updated_at']),
@@ -179,7 +223,26 @@ function event_from_input(array $b, ?array $current = null): array
     if ($policy && !filter_var($policy, FILTER_VALIDATE_URL)) throw new HttpError(422, 'El link de la política no es una URL válida', ['field' => 'policyUrl']);
 
     $in = fn($v, array $allowed, $d) => in_array($v, $allowed, true) ? $v : $d;
+    // Si el campo no llega, se conserva el valor actual (así una petición antigua no borra ajustes nuevos).
+    $flag = fn(string $key, string $col, int $default = 1) => array_key_exists($key, $b) ? (!empty($b[$key]) ? 1 : 0) : (int)($current[$col] ?? $default);
+    $text = function (string $key, string $col, int $max, string $default) use ($b, $current) {
+        if (!array_key_exists($key, $b)) return $current[$col] ?? null;
+        $v = trim((string)$b[$key]);
+        if (mb_strlen($v) > $max) throw new HttpError(422, 'El texto es demasiado largo', ['field' => $key]);
+        return $v === '' || $v === $default ? null : $v; // null = texto predeterminado
+    };
+    $thanksTitle = $text('thanksTitle', 'thanks_title', 255, DEFAULT_THANKS_TITLE);
     return [
+        'show_dates' => $flag('showDates', 'show_dates'),
+        'banner_enabled' => $flag('bannerEnabled', 'banner_enabled'),
+        'banner_position' => array_key_exists('bannerPosition', $b) ? $in($b['bannerPosition'], ['above', 'below'], 'below') : ($current['banner_position'] ?? 'below'),
+        'banner_alt' => array_key_exists('bannerAlt', $b) ? Http::str($b, 'bannerAlt', 255) : ($current['banner_alt'] ?? null),
+        'consent_data_text' => $text('consentDataText', 'consent_data_text', 2000, DEFAULT_CONSENT_DATA),
+        'consent_news_enabled' => $flag('consentNewsEnabled', 'consent_news_enabled'),
+        'consent_news_text' => $text('consentNewsText', 'consent_news_text', 1000, DEFAULT_CONSENT_NEWS),
+        'thanks_enabled' => $flag('thanksEnabled', 'thanks_enabled'),
+        'thanks_title' => $thanksTitle,
+        'thanks_message' => $text('thanksMessage', 'thanks_message', 2000, DEFAULT_THANKS_MESSAGE),
         'name' => $name,
         'slug' => $slug,
         'status' => $in($b['status'] ?? null, ['draft', 'published'], $current['status'] ?? 'draft'),

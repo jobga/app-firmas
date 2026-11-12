@@ -158,7 +158,7 @@ function complete_signature(array $s, array $e, string $method): array
         $url = Util::baseUrl() . '/comprobante/' . $s['token'];
         $ev = Util::e($e['name']);
         $html = "<div style=\"font-family:Arial,sans-serif;color:#3D3B36;max-width:520px\">"
-            . "<h2 style=\"color:#161616\">¡Gracias! Tu firma quedó registrada</h2>"
+            . "<h2 style=\"color:#161616\">" . Util::e(!empty($e['thanks_enabled']) && trim((string)$e['thanks_title']) !== '' ? $e['thanks_title'] : DEFAULT_THANKS_TITLE) . "</h2>"
             . "<p>Evento: <strong>{$ev}</strong></p><p>Folio: <strong>{$folio}</strong><br>" . ($method === 'email' ? 'Verificada' : 'Registrada') . ": " . date('Y-m-d H:i', strtotime($verifiedAt . ' UTC')) . "</p>"
             . "<p style=\"font-family:monospace;font-size:12px;word-break:break-all\">Huella (SHA-256): {$hash}</p>"
             . "<p>Adjuntamos el comprobante en PDF. También puedes <a href=\"{$url}\">verlo en línea</a>.</p></div>";
@@ -295,7 +295,8 @@ return [
             'pets' => $pets ? mb_substr(implode(',', $pets), 0, 255) : null,
             'extra' => $extra ? json_encode($extra, JSON_UNESCAPED_UNICODE) : null,
             'consent_data' => 1,
-            'consent_news' => !empty($b['consentNews']) ? 1 : 0,
+            'consent_news' => !empty($e['consent_news_enabled']) && !empty($b['consentNews']) ? 1 : 0,
+            'consent_text' => consent_data_plain($e),
             'device' => preg_match('/Mobi|Android|iPhone|iPad/i', $ua) ? 'mobile' : 'desktop',
             'ip' => Http::ip(),
             'user_agent' => $ua,

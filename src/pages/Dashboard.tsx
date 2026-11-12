@@ -78,6 +78,7 @@ function SignatureDialog({ id, onClose }: { id: number; onClose: () => void }) {
     ['Documento', `${data.docType} ${data.docNumber}`], ['Correo', data.email], ['Celular', data.phone], ['Nacimiento', data.birthDate],
     ['Género', data.gender], ['Departamento', data.department], ['Municipio', data.municipality], ['Zona', data.zone], ['Grupo étnico', data.ethnicGroup], ['Animales', data.pets],
     ...Object.entries(data.extra ?? {}).filter(([, v]) => v).map(([k, v]) => [k === 'education' ? 'Nivel educativo' : k === 'disability' ? 'Discapacidad' : 'Campo adicional', v] as [string, string]),
+    ['Autorización aceptada', data.consentText],
     ['Acepta información', data.consentNews ? 'Sí' : 'No'], ['Dispositivo', data.device], ['IP', data.ip],
     ['Registro', fmtDateTime(data.createdAt)], ['Firma', fmtDateTime(data.signedAt)],
     [data.verification === 'none' ? 'Registrada' : 'Verificada', fmtDateTime(data.verifiedAt)],
