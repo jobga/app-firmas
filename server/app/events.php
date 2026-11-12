@@ -72,6 +72,8 @@ function event_public(array $e): array
         'closesAt' => Util::iso($e['closes_at']),
         'showDates' => (bool)($e['show_dates'] ?? true),
         'goal' => $e['goal'] !== null ? (int)$e['goal'] : null,
+        'showCount' => (bool)($e['show_count'] ?? true),
+        'lineDrawings' => in_array($e['line_drawings'] ?? '', ['animated', 'static', 'hidden'], true) ? $e['line_drawings'] : 'animated',
         'colors' => event_colors($e),
         'logoUrl' => $e['logo_path'] ? $base . '/' . $e['logo_path'] : null,
         'backgroundUrl' => $e['background_path'] ? $base . '/' . $e['background_path'] : null,
@@ -93,13 +95,19 @@ function event_public(array $e): array
         'requireEmailCode' => (bool)($e['require_email_code'] ?? true),
         'sendReceipt' => (bool)$e['send_receipt'],
         'isOpen' => $open,
-        'verifiedCount' => (int)Db::value("SELECT COUNT(*) FROM `#__signatures` WHERE event_id = ? AND status = 'verified'", [$e['id']]),
+        // Si el evento oculta el contador, la API pública tampoco lo revela.
+        'verifiedCount' => !empty($e['show_count']) || !array_key_exists('show_count', $e) ? event_verified_count($e) : null,
     ];
+}
+
+function event_verified_count(array $e): int
+{
+    return (int)Db::value("SELECT COUNT(*) FROM `#__signatures` WHERE event_id = ? AND status = 'verified'", [$e['id']]);
 }
 
 function event_admin(array $e): array
 {
-    return event_public($e) + [
+    return ['verifiedCount' => event_verified_count($e)] + event_public($e) + [
         'maxAttempts' => (int)$e['max_attempts'],
         'bannerUrl' => !empty($e['banner_path']) ? app_base_path() . '/' . $e['banner_path'] : null,
         'bannerEnabled' => (bool)($e['banner_enabled'] ?? true),
@@ -152,6 +160,8 @@ function event_from_input(array $b, ?array $current = null): array
     $thanksTitle = $text('thanksTitle', 'thanks_title', 255, DEFAULT_THANKS_TITLE);
     return [
         'show_dates' => $flag('showDates', 'show_dates'),
+        'show_count' => $flag('showCount', 'show_count'),
+        'line_drawings' => array_key_exists('lineDrawings', $b) ? $in($b['lineDrawings'], ['animated', 'static', 'hidden'], 'animated') : ($current['line_drawings'] ?? 'animated'),
         'banner_enabled' => $flag('bannerEnabled', 'banner_enabled'),
         'banner_position' => array_key_exists('bannerPosition', $b) ? $in($b['bannerPosition'], ['above', 'below'], 'below') : ($current['banner_position'] ?? 'below'),
         'banner_alt' => array_key_exists('bannerAlt', $b) ? Http::str($b, 'bannerAlt', 255) : ($current['banner_alt'] ?? null),

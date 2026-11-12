@@ -56,6 +56,10 @@ export type PublicEvent = {
   /** Mostrar las fechas de apertura y cierre en la página pública. */
   showDates: boolean;
   goal: number | null;
+  /** Mostrar el número de firmas verificadas en la página pública. */
+  showCount: boolean;
+  /** Dibujos de gato y perro: con animación del trazo, fijos u ocultos. */
+  lineDrawings: 'animated' | 'static' | 'hidden';
   colors: EventColors;
   logoUrl: string | null;
   backgroundUrl: string | null;
@@ -73,11 +77,13 @@ export type PublicEvent = {
   requireEmailCode: boolean;
   sendReceipt: boolean;
   isOpen: boolean;
-  verifiedCount: number;
+  /** null en la página pública cuando el evento oculta el contador. */
+  verifiedCount: number | null;
 };
 
 export type AdminEvent = PublicEvent & {
   maxAttempts: number;
+  verifiedCount: number;
   bannerUrl: string | null;
   bannerEnabled: boolean;
   bannerPosition: 'above' | 'below';

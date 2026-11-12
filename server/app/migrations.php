@@ -36,4 +36,10 @@ return [
         // Texto de autorización que aceptó cada firmante (para auditoría).
         'ALTER TABLE `#__signatures` ADD COLUMN `consent_text` TEXT NULL AFTER `consent_news`',
     ],
+    6 => [
+        // Mostrar u ocultar el número de firmas verificadas; dibujos de líneas animados, fijos u ocultos.
+        'ALTER TABLE `#__events`'
+            . ' ADD COLUMN `show_count` TINYINT(1) NOT NULL DEFAULT 1 AFTER `goal`,'
+            . " ADD COLUMN `line_drawings` VARCHAR(10) NOT NULL DEFAULT 'animated' AFTER `show_count`",
+    ],
 ];

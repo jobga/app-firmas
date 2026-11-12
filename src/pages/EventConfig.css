@@ -69,3 +69,5 @@
 .preview__msg { font-size: 12px; line-height: 1.5; white-space: pre-line; }
 .preview__folio { font-size: 12px; font-family: var(--font-mono); }
 .preview__thanks .preview__cta { align-self: stretch; }
+.preview__count { font-size: 12px; }
+.preview__count strong { font-family: var(--font-display); font-size: 18px; font-weight: 500; }
