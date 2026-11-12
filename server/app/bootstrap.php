@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/version.php';
 foreach (['Db', 'Http', 'Totp', 'Mailer', 'Auth', 'Util', 'Pdf'] as $lib) require __DIR__ . "/lib/{$lib}.php";
+require __DIR__ . '/geo.php';
 require __DIR__ . '/events.php';
 
 define('ROOT_DIR', dirname(__DIR__));
@@ -66,7 +67,14 @@ function app_migrate(): void
         $current = (int)(Db::setting('db_version') ?? 1);
         foreach (require __DIR__ . '/migrations.php' as $version => $statements) {
             if ($version <= $current || $version > DB_VERSION) continue;
-            foreach ($statements as $sql) $pdo->exec(Db::sql($sql));
+            foreach ($statements as $sql) {
+                try {
+                    $pdo->exec(Db::sql($sql));
+                } catch (PDOException $e) {
+                    // Columna (1060) o índice (1061) que ya existe: la migración se aplicó antes, se continúa.
+                    if (!in_array((int)($e->errorInfo[1] ?? 0), [1060, 1061], true)) throw $e;
+                }
+            }
             Db::setSetting('db_version', (string)$version);
             error_log("[animalista] base de datos actualizada a la versión {$version}");
         }

@@ -3,6 +3,7 @@
  * Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo
  */
 import { useEffect, useState, type ChangeEvent } from 'react';
+import { loadGeo, type Department } from '../lib/geo';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AdminLayout } from '../components/AdminLayout';
 import { AnimalDrawing, CatMark } from '../components/LineArt';
@@ -11,8 +12,8 @@ import { Alert } from '../components/Alert';
 import { QrCode } from '../components/QrCode';
 import QRCode from 'qrcode';
 import {
-  api, ApiError, DEFAULT_CONSENT_DATA, DEFAULT_CONSENT_NEWS, DEFAULT_THANKS_TITLE, defaultThanksMessage, del, get, post, put,
-  type AdminEvent, type CustomField, type EventColors, type OptionalField,
+  api, ApiError, DEFAULT_CONSENT_DATA, DEFAULT_CONSENT_NEWS, DEFAULT_THANKS_TITLE, defaultThanksMessage, del, get, isExclusiveOption, post, put,
+  type AdminEvent, type CustomField, type CustomFieldType, type EventColors, type ListKey, type OptionalField,
 } from '../lib/api';
 import { ConsentText } from './PublicSign';
 import { DEFAULT_SHARE_TEXT, renderShareImage, shareMessage } from '../lib/shareImage';
@@ -34,10 +35,29 @@ const DEFAULT_COLORS: EventColors = {
 };
 
 const OPTIONAL_FIELDS: [OptionalField, string][] = [
-  ['phone', 'Celular'], ['birth_date', 'Fecha de nacimiento'], ['gender', 'Género'], ['municipality', 'Municipio'],
+  ['phone', 'Celular'], ['birth_date', 'Fecha de nacimiento'], ['gender', 'Género'], ['municipality', 'Departamento y municipio'],
   ['zone', 'Zona urbana / rural'], ['ethnic_group', 'Grupo étnico'], ['pets', 'Convivencia con animales'],
   ['education', 'Nivel educativo'], ['disability', 'Discapacidad'],
 ];
+
+/** Listas predeterminadas (iguales a LIST_FIELDS en server/app/events.php). */
+const LIST_FIELDS: { key: ListKey; label: string; kind: 'select' | 'radio' | 'multi'; defaults: string[] }[] = [
+  { key: 'gender', label: 'Género', kind: 'select', defaults: ['Femenino', 'Masculino', 'No binario', 'Prefiero no decir'] },
+  { key: 'zone', label: 'Zona', kind: 'radio', defaults: ['Urbana', 'Rural'] },
+  { key: 'ethnic_group', label: 'Grupo étnico', kind: 'select', defaults: ['Ninguno', 'Indígena', 'Afrocolombiano', 'Raizal', 'Palenquero', 'Rrom', 'Campesino'] },
+  { key: 'pets', label: 'Animales', kind: 'multi', defaults: ['Perros', 'Gatos', 'Otros', 'Ninguno'] },
+  { key: 'education', label: 'Nivel educativo', kind: 'select', defaults: ['Primaria', 'Secundaria', 'Técnico o tecnólogo', 'Universitario', 'Posgrado', 'Ninguno'] },
+  { key: 'disability', label: 'Discapacidad', kind: 'select', defaults: ['No', 'Física', 'Visual', 'Auditiva', 'Cognitiva', 'Psicosocial', 'Múltiple'] },
+];
+const DEFAULT_LISTS = Object.fromEntries(LIST_FIELDS.map((f) => [f.key, f.defaults])) as Record<ListKey, string[]>;
+const KIND_HINT = {
+  select: 'Lista desplegable: el firmante elige una opción.',
+  radio: 'Botones: el firmante elige una opción.',
+  multi: 'Opción múltiple: el firmante puede marcar varias. «Ninguno» o «Ninguna» desmarca las demás.',
+};
+const TYPE_LABEL: Record<CustomFieldType, string> = { text: 'Texto', select: 'Lista', multi: 'Opción múltiple' };
+/** Limpia las líneas escritas: sin espacios sobrantes, vacías ni repetidas. */
+const cleanLines = (lines: string[]) => lines.map((l) => l.trim()).filter((l, i, a) => l && a.findIndex((x) => x.toLowerCase() === l.toLowerCase()) === i);
 
 type Draft = {
   name: string; slug: string; description: string; organization: string; policyUrl: string;
@@ -47,7 +67,7 @@ type Draft = {
   consentDataText: string; consentNewsEnabled: boolean; consentNewsText: string;
   thanksEnabled: boolean; thanksTitle: string; thanksMessage: string;
   shareEnabled: boolean; shareText: string;
-  optional: Record<OptionalField, boolean>; custom: CustomField[]; municipalities: string;
+  optional: Record<OptionalField, boolean>; custom: CustomField[]; lists: Record<ListKey, string[]>; geoDeps: string[];
   codeTtlMinutes: number; maxAttempts: number; requireEmailCode: boolean; emailSubject: string; sendReceipt: boolean;
 };
 
@@ -66,7 +86,7 @@ const EMPTY: Draft = {
   thanksEnabled: true, thanksTitle: '', thanksMessage: '',
   shareEnabled: true, shareText: '',
   optional: { phone: true, birth_date: true, gender: true, municipality: true, zone: true, ethnic_group: true, pets: true, education: false, disability: false },
-  custom: [], municipalities: 'Pasto\nIpiales\nTumaco\nTúquerres\nOtro',
+  custom: [], lists: DEFAULT_LISTS, geoDeps: [],
   codeTtlMinutes: 10, maxAttempts: 3, requireEmailCode: true, emailSubject: 'Tu código para confirmar la firma', sendReceipt: true,
 };
 
@@ -79,7 +99,8 @@ function fromEvent(e: AdminEvent): Draft {
     bannerEnabled: e.bannerEnabled, bannerPosition: e.bannerPosition, bannerAlt: e.bannerAlt,
     consentDataText: e.consentDataText, consentNewsEnabled: e.consentNewsEnabled, consentNewsText: e.consentNewsText,
     thanksEnabled: e.thanks.enabled, thanksTitle: e.thanks.title ?? '', thanksMessage: e.thanks.message ?? '',
-    shareEnabled: e.share.enabled, shareText: e.share.text ?? '', optional: e.fields.optional, custom: e.fields.custom, municipalities: e.municipalities.join('\n'),
+    shareEnabled: e.share.enabled, shareText: e.share.text ?? '', optional: e.fields.optional, custom: e.fields.custom,
+    lists: { ...DEFAULT_LISTS, ...e.fields.lists }, geoDeps: e.fields.geo.departments,
     codeTtlMinutes: e.codeTtlMinutes, maxAttempts: e.maxAttempts,
     requireEmailCode: e.requireEmailCode, emailSubject: e.emailSubject, sendReceipt: e.sendReceipt,
   };
@@ -95,6 +116,7 @@ export function EventConfig() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const [newField, setNewField] = useState('');
+  const [newType, setNewType] = useState<CustomFieldType>('text');
   const [showQr, setShowQr] = useState(false);
   const [previewMode, setPreviewMode] = useState<'form' | 'thanks'>('form');
   const [shareImg, setShareImg] = useState<string | null>(null);
@@ -124,8 +146,13 @@ export function EventConfig() {
       colors, bannerEnabled: draft.bannerEnabled, bannerPosition: draft.bannerPosition, bannerAlt: draft.bannerAlt,
       consentDataText: draft.consentDataText, consentNewsEnabled: draft.consentNewsEnabled, consentNewsText: draft.consentNewsText,
       thanksEnabled: draft.thanksEnabled, thanksTitle: draft.thanksTitle, thanksMessage: draft.thanksMessage,
-      shareEnabled: draft.shareEnabled, shareText: draft.shareText, fields: { optional: draft.optional, custom: draft.custom },
-      municipalities: draft.municipalities.split('\n').map((m) => m.trim()).filter(Boolean),
+      shareEnabled: draft.shareEnabled, shareText: draft.shareText,
+      fields: {
+        optional: draft.optional,
+        custom: draft.custom.map((c) => ({ ...c, options: c.type === 'text' ? [] : cleanLines(c.options) })),
+        lists: Object.fromEntries(LIST_FIELDS.map((f) => [f.key, cleanLines(draft.lists[f.key])])),
+        geo: { departments: draft.geoDeps },
+      },
       codeTtlMinutes: draft.codeTtlMinutes, maxAttempts: draft.maxAttempts,
       requireEmailCode: draft.requireEmailCode, emailSubject: draft.emailSubject, sendReceipt: draft.sendReceipt,
     };
@@ -175,7 +202,7 @@ export function EventConfig() {
   const addField = () => {
     const label = newField.trim();
     if (!label) return;
-    set('custom', [...draft.custom, { label, required: false }]);
+    set('custom', [...draft.custom, { label, required: false, type: newType, options: newType === 'text' ? [] : ['Opción 1', 'Opción 2'] }]);
     setNewField('');
   };
 
@@ -382,6 +409,10 @@ export function EventConfig() {
                 {draft.custom.map((c, i) => (
                   <li key={c.id ?? `new-${i}`}>
                     <input className="field" value={c.label} aria-label="Nombre del campo" onChange={(e) => set('custom', draft.custom.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
+                    <select className="field field--type" value={c.type} aria-label="Tipo de campo"
+                      onChange={(e) => { const type = e.target.value as CustomFieldType; set('custom', draft.custom.map((x, j) => j === i ? { ...x, type, options: type === 'text' ? [] : x.options.length ? x.options : ['Opción 1', 'Opción 2'] } : x)); }}>
+                      {(Object.keys(TYPE_LABEL) as CustomFieldType[]).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+                    </select>
                     <label className="check-row"><input type="checkbox" checked={c.required} onChange={(e) => set('custom', draft.custom.map((x, j) => j === i ? { ...x, required: e.target.checked } : x))} /> Obligatorio</label>
                     <button type="button" className="btn btn--ghost btn--sm" onClick={() => set('custom', draft.custom.filter((_, j) => j !== i))}>Quitar</button>
                   </li>
@@ -391,13 +422,12 @@ export function EventConfig() {
             <div className="btn-row" style={{ gap: 8 }}>
               <input className="field" style={{ flex: '1 1 220px' }} placeholder="Nombre del campo, p. ej. Barrio" value={newField}
                 onChange={(e) => setNewField(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addField(); } }} />
+              <select className="field field--type" value={newType} aria-label="Tipo del campo nuevo" onChange={(e) => setNewType(e.target.value as CustomFieldType)}>
+                {(Object.keys(TYPE_LABEL) as CustomFieldType[]).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+              </select>
               <button type="button" className="btn btn--dashed" onClick={addField}>+ Agregar campo personalizado</button>
             </div>
-            {draft.optional.municipality && (
-              <label className="lbl">Municipios (uno por línea)
-                <textarea className="field" rows={5} value={draft.municipalities} onChange={(e) => set('municipalities', e.target.value)} />
-              </label>
-            )}
+            <FieldOptionsTabs draft={draft} set={set} />
           </section>
 
           <section className="card card--roomy">
@@ -613,5 +643,105 @@ export function EventConfig() {
         </aside>
       </div>
     </AdminLayout>
+  );
+}
+
+type Tab = { id: string; label: string };
+
+/** Pestañas para ajustar las opciones de cada campo de lista u opción múltiple activo, y el alcance geográfico. */
+function FieldOptionsTabs({ draft, set }: { draft: Draft; set: <K extends keyof Draft>(k: K, v: Draft[K]) => void }) {
+  const tabs: Tab[] = [
+    ...(draft.optional.municipality ? [{ id: 'geo', label: 'Departamentos' }] : []),
+    ...LIST_FIELDS.filter((f) => draft.optional[f.key]).map((f) => ({ id: f.key, label: f.label })),
+    ...draft.custom.map((c, i) => ({ c, i })).filter(({ c }) => c.type !== 'text').map(({ c, i }) => ({ id: `custom:${i}`, label: c.label || `Campo ${i + 1}` })),
+  ];
+  const [active, setActive] = useState(tabs[0]?.id ?? '');
+  const current = tabs.find((t) => t.id === active) ?? tabs[0];
+  if (!current) return null;
+
+  const listField = LIST_FIELDS.find((f) => f.key === current.id);
+  const customIndex = current.id.startsWith('custom:') ? Number(current.id.slice(7)) : -1;
+  const custom = customIndex >= 0 ? draft.custom[customIndex] : null;
+  const lines = listField ? draft.lists[listField.key] : custom?.options ?? [];
+  const kind = listField ? listField.kind : custom?.type === 'multi' ? 'multi' : 'select';
+  const setLines = (v: string[]) => {
+    if (listField) set('lists', { ...draft.lists, [listField.key]: v });
+    else if (custom) set('custom', draft.custom.map((x, j) => (j === customIndex ? { ...x, options: v } : x)));
+  };
+  const count = cleanLines(lines).length;
+  const tabKey = (e: React.KeyboardEvent, i: number) => {
+    const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const next = tabs[(i + d + tabs.length) % tabs.length];
+    setActive(next.id);
+    document.getElementById(`opt-tab-${next.id}`)?.focus();
+  };
+
+  return (
+    <div className="opt-tabs">
+      <h3 className="opt-tabs__title">Opciones de las listas</h3>
+      <div className="opt-tabs__list" role="tablist" aria-label="Campos con lista de opciones">
+        {tabs.map((t, i) => (
+          <button key={t.id} id={`opt-tab-${t.id}`} type="button" role="tab" aria-selected={t.id === current.id} aria-controls="opt-panel"
+            tabIndex={t.id === current.id ? 0 : -1} className="opt-tab" onClick={() => setActive(t.id)} onKeyDown={(e) => tabKey(e, i)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div id="opt-panel" className="opt-tabs__panel" role="tabpanel" aria-labelledby={`opt-tab-${current.id}`}>
+        {current.id === 'geo' ? (
+          <GeoScope selected={draft.geoDeps} onChange={(v) => set('geoDeps', v)} />
+        ) : (
+          <>
+            <p className="small muted" style={{ margin: 0 }}>{KIND_HINT[kind]}</p>
+            <label className="lbl">Opciones (una por línea) · {count} {count === 1 ? 'opción' : 'opciones'}
+              <textarea className="field" rows={Math.min(10, Math.max(4, lines.length + 1))} value={lines.join('\n')}
+                onChange={(e) => setLines(e.target.value.split('\n'))} />
+            </label>
+            {count < 2 && <p className="small" style={{ color: 'var(--bad-fg)', margin: 0 }}>Agrega al menos 2 opciones.</p>}
+            {kind === 'multi' && !cleanLines(lines).some(isExclusiveOption) && (
+              <p className="small muted" style={{ margin: 0 }}>Consejo: agrega «Ninguno» si el firmante puede no marcar ninguna opción.</p>
+            )}
+            {listField && (
+              <button type="button" className="btn btn--ghost btn--sm" style={{ alignSelf: 'flex-start' }}
+                onClick={() => setLines(listField.defaults)}>Restaurar opciones predeterminadas</button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Departamentos que puede elegir el firmante (todo el país o una selección). */
+function GeoScope({ selected, onChange }: { selected: string[]; onChange: (v: string[]) => void }) {
+  const [geo, setGeo] = useState<Department[] | null>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => { loadGeo().then(setGeo).catch(() => setErr(true)); }, []);
+  if (err) return <p className="small" style={{ color: 'var(--bad-fg)' }}>No se pudo cargar la lista de departamentos.</p>;
+  if (!geo) return <p className="small muted">Cargando departamentos…</p>;
+  const all = selected.length === 0;
+  const munis = (all ? geo : geo.filter((d) => selected.includes(d.code))).reduce((n, d) => n + d.municipalities.length, 0);
+  const toggle = (code: string, on: boolean) => onChange(on ? [...selected, code] : selected.filter((c) => c !== code));
+  return (
+    <>
+      <p className="small muted" style={{ margin: 0 }}>Lista oficial del DANE (DIVIPOLA). El firmante elige departamento y luego municipio.</p>
+      <div className="chips" role="radiogroup" aria-label="Alcance">
+        <label className="chip"><input type="radio" name="geo-scope" checked={all} onChange={() => onChange([])} /> Todo el país</label>
+        <label className="chip"><input type="radio" name="geo-scope" checked={!all} onChange={() => { if (all) onChange(['52']); }} /> Solo algunos departamentos</label>
+      </div>
+      {!all && (
+        <div className="geo-grid">
+          {geo.map((d) => (
+            <label key={d.code} className="check-row">
+              <input type="checkbox" checked={selected.includes(d.code)} disabled={selected.length === 1 && selected.includes(d.code)}
+                onChange={(e) => toggle(d.code, e.target.checked)} /> {d.name} <span className="xsmall muted">({d.municipalities.length})</span>
+            </label>
+          ))}
+        </div>
+      )}
+      <p className="small" style={{ margin: 0 }}><strong>{all ? geo.length : selected.length}</strong> departamentos · <strong>{munis.toLocaleString('es-CO')}</strong> municipios disponibles</p>
+    </>
   );
 }

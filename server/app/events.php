@@ -5,7 +5,7 @@ const OPTIONAL_FIELDS = [
     'phone' => 'Celular',
     'birth_date' => 'Fecha de nacimiento',
     'gender' => 'Género',
-    'municipality' => 'Municipio',
+    'municipality' => 'Departamento y municipio',
     'zone' => 'Zona urbana / rural',
     'ethnic_group' => 'Grupo étnico',
     'pets' => 'Convivencia con animales',
@@ -45,18 +45,88 @@ function consent_data_plain(array $e): string
 }
 const DEFAULT_MUNICIPALITIES = ['Pasto', 'Ipiales', 'Tumaco', 'Túquerres', 'Otro'];
 
+/**
+ * Campos de caracterización con lista de opciones editable por evento.
+ * type: select (una opción en lista desplegable), radio (una opción en botones), multi (varias opciones).
+ * En las listas de opción múltiple, «Ninguno»/«Ninguna» es excluyente.
+ */
+const LIST_FIELDS = [
+    'gender' => ['label' => 'Género', 'type' => 'select', 'options' => ['Femenino', 'Masculino', 'No binario', 'Prefiero no decir']],
+    'zone' => ['label' => 'Zona urbana / rural', 'type' => 'radio', 'options' => ['Urbana', 'Rural']],
+    'ethnic_group' => ['label' => 'Grupo étnico', 'type' => 'select', 'options' => ['Ninguno', 'Indígena', 'Afrocolombiano', 'Raizal', 'Palenquero', 'Rrom', 'Campesino']],
+    'pets' => ['label' => 'Convivencia con animales', 'type' => 'multi', 'options' => ['Perros', 'Gatos', 'Otros', 'Ninguno']],
+    'education' => ['label' => 'Nivel educativo', 'type' => 'select', 'options' => ['Primaria', 'Secundaria', 'Técnico o tecnólogo', 'Universitario', 'Posgrado', 'Ninguno']],
+    'disability' => ['label' => 'Discapacidad', 'type' => 'select', 'options' => ['No', 'Física', 'Visual', 'Auditiva', 'Cognitiva', 'Psicosocial', 'Múltiple']],
+];
+const MAX_OPTIONS = 60;
+const MAX_OPTION_LEN = 60;
+
+/** Limpia una lista de opciones: recorta, quita vacías y duplicadas, limita cantidad y longitud. */
+function clean_options(mixed $list, int $max = MAX_OPTIONS): array
+{
+    if (is_string($list)) $list = preg_split('/\R/u', $list);
+    $out = [];
+    foreach ((array)$list as $o) {
+        if (!is_string($o) && !is_numeric($o)) continue;
+        $o = mb_substr(trim(preg_replace('/[\x00-\x1F\x7F,]+/u', ' ', (string)$o)), 0, MAX_OPTION_LEN);
+        if ($o !== '' && !in_array(mb_strtolower($o), array_map('mb_strtolower', $out), true)) $out[] = $o;
+        if (count($out) >= $max) break;
+    }
+    return $out;
+}
+
+/** Opción excluyente de una lista múltiple («Ninguno», «Ninguna»). */
+function is_exclusive_option(string $o): bool
+{
+    return (bool)preg_match('/^ningun[oa]s?$/iu', trim($o));
+}
+
+/** Aplica la regla de exclusividad y conserva solo valores de la lista. */
+function pick_multi(mixed $values, array $options): array
+{
+    $sel = array_values(array_intersect($options, array_map('strval', array_filter((array)$values, 'is_scalar'))));
+    foreach ($sel as $v) if (is_exclusive_option($v)) return [$v];
+    return $sel;
+}
+
 function event_default_fields(): array
 {
     $opt = array_fill_keys(array_keys(OPTIONAL_FIELDS), true);
     $opt['education'] = false;
     $opt['disability'] = false;
-    return ['optional' => $opt, 'custom' => []];
+    return ['optional' => $opt, 'custom' => [], 'lists' => array_map(fn($d) => $d['options'], LIST_FIELDS), 'geo' => ['departments' => []]];
+}
+
+/** Campos del evento con valores por defecto para eventos creados en versiones anteriores. */
+function event_fields(array $e): array
+{
+    $f = json_decode((string)$e['fields'], true) ?: event_default_fields();
+    $f['optional'] = array_merge(event_default_fields()['optional'], array_map('boolval', (array)($f['optional'] ?? [])));
+    $lists = [];
+    foreach (LIST_FIELDS as $k => $def) {
+        $lists[$k] = clean_options($f['lists'][$k] ?? null) ?: $def['options'];
+    }
+    $f['lists'] = $lists;
+    if (!isset($f['geo']) || !is_array($f['geo'])) {
+        // Eventos anteriores a 1.3: su lista de municipios era de Nariño.
+        $legacy = json_decode((string)($e['municipalities'] ?? ''), true) ?: DEFAULT_MUNICIPALITIES;
+        $f['geo'] = ['departments' => array_diff($legacy, DEFAULT_MUNICIPALITIES) ? [] : ['52']];
+    }
+    $f['geo']['departments'] = geo_clean_departments($f['geo']['departments'] ?? []);
+    $custom = [];
+    foreach ((array)($f['custom'] ?? []) as $c) {
+        if (!is_array($c) || empty($c['id'])) continue;
+        $type = in_array($c['type'] ?? 'text', ['text', 'select', 'multi'], true) ? ($c['type'] ?? 'text') : 'text';
+        $custom[] = ['id' => $c['id'], 'label' => (string)$c['label'], 'required' => !empty($c['required']), 'type' => $type,
+            'options' => $type === 'text' ? [] : clean_options($c['options'] ?? [])];
+    }
+    $f['custom'] = $custom;
+    return $f;
 }
 
 function event_public(array $e): array
 {
-    $fields = json_decode((string)$e['fields'], true) ?: event_default_fields();
-    $fields['optional'] = array_merge(event_default_fields()['optional'], $fields['optional'] ?? []);
+    $fields = event_fields($e);
     $now = gmdate('Y-m-d H:i:s');
     $open = $e['status'] === 'published'
         && (!$e['opens_at'] || $e['opens_at'] <= $now)
@@ -139,8 +209,20 @@ function event_from_input(array $b, ?array $current = null): array
         $label = is_array($c) ? trim((string)($c['label'] ?? '')) : '';
         if ($label === '') continue;
         $id = preg_match('/^[a-z0-9_]{1,30}$/', (string)($c['id'] ?? '')) ? $c['id'] : 'c_' . bin2hex(random_bytes(3));
-        $custom[] = ['id' => $id, 'label' => mb_substr($label, 0, 80), 'required' => (bool)($c['required'] ?? false)];
+        $type = in_array($c['type'] ?? 'text', ['text', 'select', 'multi'], true) ? ($c['type'] ?? 'text') : 'text';
+        $options = $type === 'text' ? [] : clean_options($c['options'] ?? []);
+        if ($type !== 'text' && count($options) < 2) {
+            throw new HttpError(422, "El campo «" . mb_substr($label, 0, 80) . "» necesita al menos 2 opciones", ['field' => 'custom']);
+        }
+        $custom[] = ['id' => $id, 'label' => mb_substr($label, 0, 80), 'required' => (bool)($c['required'] ?? false), 'type' => $type, 'options' => $options];
     }
+    $lists = [];
+    foreach (LIST_FIELDS as $k => $def) {
+        $opts = clean_options($b['fields']['lists'][$k] ?? $def['options']);
+        if ($optional[$k] && count($opts) < 2) throw new HttpError(422, "La lista «{$def['label']}» necesita al menos 2 opciones", ['field' => 'lists']);
+        $lists[$k] = $opts ?: $def['options'];
+    }
+    $geo = ['departments' => geo_clean_departments($b['fields']['geo']['departments'] ?? [])];
 
     $munis = array_values(array_filter(array_map(fn($m) => mb_substr(trim((string)$m), 0, 120), (array)($b['municipalities'] ?? DEFAULT_MUNICIPALITIES))));
 
@@ -190,7 +272,7 @@ function event_from_input(array $b, ?array $current = null): array
         'closes_at' => $date($b['closesAt'] ?? null),
         'goal' => isset($b['goal']) && is_numeric($b['goal']) && $b['goal'] > 0 ? (int)$b['goal'] : null,
         'colors' => json_encode($colors),
-        'fields' => json_encode(['optional' => $optional, 'custom' => $custom], JSON_UNESCAPED_UNICODE),
+        'fields' => json_encode(['optional' => $optional, 'custom' => $custom, 'lists' => $lists, 'geo' => $geo], JSON_UNESCAPED_UNICODE),
         'municipalities' => json_encode($munis ?: DEFAULT_MUNICIPALITIES, JSON_UNESCAPED_UNICODE),
         'code_ttl_minutes' => $in((int)($b['codeTtlMinutes'] ?? 10), [5, 10, 15], 10),
         'max_attempts' => $in((int)($b['maxAttempts'] ?? 3), [3, 5], 3),

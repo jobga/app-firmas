@@ -206,14 +206,34 @@ return [
         return ['ok' => true];
     }],
 
+    // Departamentos y municipios (DIVIPOLA). Se puede guardar en caché: solo cambia con una nueva versión.
+    ['GET', '/geo', function () {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: public, max-age=86400');
+        header('X-Content-Type-Options: nosniff');
+        echo json_encode(['version' => APP_VERSION, 'departments' => geo_public()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }],
+
     // Paso 1: datos personales y autorización.
     ['POST', '/events/{slug}/signatures', function ($p) {
         $e = find_event_by_slug($p['slug']);
         assert_open($e);
         Http::rateLimit('start:' . Http::ip(), 30, 3600);
         $b = Http::body();
-        $f = json_decode((string)$e['fields'], true) ?: event_default_fields();
-        $opt = array_merge(event_default_fields()['optional'], $f['optional'] ?? []);
+        $f = event_fields($e);
+        $opt = $f['optional'];
+        $L = $f['lists'];
+        // Valor de una lista del evento ('' si no es obligatorio y no se eligió).
+        $one = function (string $key, string $field, string $label, bool $required) use ($b, $L) {
+            $v = trim((string)(is_scalar($b[$field] ?? null) ? $b[$field] : ''));
+            if ($v === '') {
+                if ($required) throw new HttpError(422, "Selecciona {$label}", ['field' => $field]);
+                return null;
+            }
+            if (!in_array($v, $L[$key], true)) throw new HttpError(422, "Elige una opción válida en «{$label}»", ['field' => $field]);
+            return $v;
+        };
 
         if (empty($b['consentData'])) throw new HttpError(422, 'Debes autorizar el tratamiento de datos personales', ['field' => 'consentData']);
         $email = Http::str($b, 'email', 190, true);
@@ -233,12 +253,28 @@ return [
             $birth = date('Y-m-d', $ts);
         }
         $extra = [];
-        foreach (['education', 'disability'] as $k) if ($opt[$k]) $extra[$k] = Http::str($b, $k, 120);
-        foreach ($f['custom'] ?? [] as $c) {
-            $extra[$c['id']] = Http::str((array)($b['custom'] ?? []), $c['id'], 500, !empty($c['required']), $c['label']);
+        if ($opt['education']) $extra['education'] = $one('education', 'education', 'el nivel educativo', false);
+        if ($opt['disability']) $extra['disability'] = $one('disability', 'disability', 'la discapacidad', false);
+        $answers = (array)($b['custom'] ?? []);
+        foreach ($f['custom'] as $c) {
+            $req = !empty($c['required']);
+            if ($c['type'] === 'multi') {
+                $sel = pick_multi($answers[$c['id']] ?? [], $c['options']);
+                if ($req && !$sel) throw new HttpError(422, "Elige al menos una opción en «{$c['label']}»", ['field' => 'custom_' . $c['id']]);
+                $extra[$c['id']] = $sel ? implode(', ', $sel) : null;
+            } elseif ($c['type'] === 'select') {
+                $v = trim((string)(is_scalar($answers[$c['id']] ?? null) ? $answers[$c['id']] : ''));
+                if ($v === '' && $req) throw new HttpError(422, "El campo «{$c['label']}» es obligatorio", ['field' => 'custom_' . $c['id']]);
+                if ($v !== '' && !in_array($v, $c['options'], true)) throw new HttpError(422, "Elige una opción válida en «{$c['label']}»", ['field' => 'custom_' . $c['id']]);
+                $extra[$c['id']] = $v !== '' ? $v : null;
+            } else {
+                $extra[$c['id']] = Http::str($answers, $c['id'], 500, $req, $c['label']);
+            }
         }
-        $pets = $opt['pets'] ? array_values(array_intersect((array)($b['pets'] ?? []), ['Perros', 'Gatos', 'Otros', 'Ninguno'])) : [];
-        if (in_array('Ninguno', $pets, true)) $pets = ['Ninguno']; // «Ninguno» excluye las demás opciones
+        $pets = $opt['pets'] ? pick_multi($b['pets'] ?? [], $L['pets']) : [];
+        [$department, $municipality] = $opt['municipality']
+            ? geo_resolve($f, is_scalar($b['department'] ?? null) ? (string)$b['department'] : null, is_scalar($b['municipality'] ?? null) ? (string)$b['municipality'] : null)
+            : [null, null];
         $ua = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
 
         $token = bin2hex(random_bytes(24));
@@ -251,11 +287,12 @@ return [
             'email' => strtolower($email),
             'phone' => $opt['phone'] ? Http::str($b, 'phone', 40) : null,
             'birth_date' => $birth,
-            'gender' => $opt['gender'] ? Http::str($b, 'gender', 40, true) : null,
-            'municipality' => $opt['municipality'] ? Http::str($b, 'municipality', 120, true) : null,
-            'zone' => $opt['zone'] ? (in_array($b['zone'] ?? '', ['Urbana', 'Rural'], true) ? $b['zone'] : throw new HttpError(422, 'Selecciona la zona de residencia', ['field' => 'zone'])) : null,
-            'ethnic_group' => $opt['ethnic_group'] ? Http::str($b, 'ethnicGroup', 60) : null,
-            'pets' => $pets ? implode(',', $pets) : null,
+            'gender' => $opt['gender'] ? $one('gender', 'gender', 'el género', true) : null,
+            'department' => $department,
+            'municipality' => $municipality,
+            'zone' => $opt['zone'] ? $one('zone', 'zone', 'la zona de residencia', true) : null,
+            'ethnic_group' => $opt['ethnic_group'] ? $one('ethnic_group', 'ethnicGroup', 'el grupo étnico', false) : null,
+            'pets' => $pets ? mb_substr(implode(',', $pets), 0, 255) : null,
             'extra' => $extra ? json_encode($extra, JSON_UNESCAPED_UNICODE) : null,
             'consent_data' => 1,
             'consent_news' => !empty($e['consent_news_enabled']) && !empty($b['consentNews']) ? 1 : 0,

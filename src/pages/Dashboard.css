@@ -54,6 +54,7 @@
 .hbars { display: flex; flex-direction: column; gap: 12px; }
 .hbar { display: grid; gap: 10px; align-items: center; font-size: 13px; }
 .hbar strong { text-align: right; }
+.hbar > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .pets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .pet { border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
