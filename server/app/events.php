@@ -33,6 +33,8 @@ function event_colors(array $e): array
 const DEFAULT_CONSENT_DATA = 'Autorizo de manera libre, previa, expresa e informada el tratamiento de mis datos personales según la Ley 1581 de 2012 y la {politica} del evento.';
 const DEFAULT_CONSENT_NEWS = 'Acepto recibir información sobre los resultados de esta convocatoria.';
 const DEFAULT_THANKS_TITLE = '¡Gracias! Tu firma quedó registrada';
+/** {evento} se reemplaza por el nombre del evento. */
+const DEFAULT_SHARE_TEXT = 'Ya firmé por «{evento}». ¡Súmate tú también!';
 const DEFAULT_THANKS_MESSAGE = 'Recibirás en tu correo el comprobante con el folio, la fecha, la hora y la huella digital (hash) de tu firma.';
 
 /** Texto de autorización de datos tal como lo lee el firmante (sin el marcador {politica}). */
@@ -83,6 +85,11 @@ function event_public(array $e): array
         'consentDataText' => trim((string)($e['consent_data_text'] ?? '')) ?: DEFAULT_CONSENT_DATA,
         'consentNewsEnabled' => (bool)($e['consent_news_enabled'] ?? true),
         'consentNewsText' => trim((string)($e['consent_news_text'] ?? '')) ?: DEFAULT_CONSENT_NEWS,
+        'share' => [
+            'enabled' => (bool)($e['share_enabled'] ?? true),
+            // null = texto predeterminado
+            'text' => trim((string)($e['share_text'] ?? '')) ?: null,
+        ],
         'thanks' => [
             'enabled' => (bool)($e['thanks_enabled'] ?? true),
             // null = texto predeterminado (el navegador lo adapta según se envíe o no el comprobante).
@@ -171,6 +178,8 @@ function event_from_input(array $b, ?array $current = null): array
         'thanks_enabled' => $flag('thanksEnabled', 'thanks_enabled'),
         'thanks_title' => $thanksTitle,
         'thanks_message' => $text('thanksMessage', 'thanks_message', 2000, DEFAULT_THANKS_MESSAGE),
+        'share_enabled' => $flag('shareEnabled', 'share_enabled'),
+        'share_text' => $text('shareText', 'share_text', 280, DEFAULT_SHARE_TEXT),
         'name' => $name,
         'slug' => $slug,
         'status' => $in($b['status'] ?? null, ['draft', 'published'], $current['status'] ?? 'draft'),

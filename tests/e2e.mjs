@@ -143,6 +143,8 @@ async function main() {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await ctx.newPage();
   const consoleErrors = [];
+  const anonCtx = await browser.newContext();
+  const anonPage = () => anonCtx;
   page.on('pageerror', (e) => consoleErrors.push(e.message));
   let secret = '';
   let recoveryCodes = [];
@@ -363,6 +365,33 @@ async function main() {
     const buf = await (await import('node:fs/promises')).readFile(await download.path());
     assert(buf.subarray(0, 5).toString() === '%PDF-' && buf.includes('%%EOF'), 'El archivo no es un PDF');
     assert(buf.includes(Buffer.from(folio)), 'El PDF no contiene el folio');
+  });
+  await test('al terminar se puede compartir en Instagram y en X', async () => {
+    const publicUrl = `${ORIGIN}${BASE_PATH}/firma/${eventSlug}`;
+    const href = await pub.getAttribute('.share a:has-text("X")', 'href');
+    const u = new URL(href);
+    assert(u.origin === 'https://x.com' && u.pathname === '/intent/post', `Enlace de X inesperado: ${href}`);
+    assert(u.searchParams.get('text') === 'Ya firmé por «Pacto por el bienestar de perros y gatos». ¡Súmate tú también!', `Texto: ${u.searchParams.get('text')}`);
+    assert(u.searchParams.get('url') === publicUrl, `URL compartida: ${u.searchParams.get('url')}`);
+    assert(await pub.getAttribute('.share a:has-text("X")', 'target') === '_blank', 'X debería abrirse en otra pestaña');
+    const [download] = await Promise.all([pub.waitForEvent('download'), pub.click('.share button:has-text("Instagram")')]);
+    const img = await (await import('node:fs/promises')).readFile(await download.path());
+    assert(img.subarray(1, 4).toString() === 'PNG', 'La imagen no es PNG');
+    const [w, h] = [img.readUInt32BE(16), img.readUInt32BE(20)];
+    assert(w === 1080 && h === 1920, `Tamaño ${w}×${h}, se esperaba 1080×1920 (historias de Instagram)`);
+    assert(download.suggestedFilename() === `firma-${eventSlug}.png`, `Nombre: ${download.suggestedFilename()}`);
+    await pub.waitForSelector('.alert--ok:has-text("súbela a tus historias")');
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(`${SHOTS}/14-imagen-instagram.png`, img);
+  });
+  await test('el enlace del evento trae vista previa para redes (Open Graph)', async () => {
+    const html = await (await anonPage().request.get(`${BASE}/firma/${eventSlug}`)).text();
+    assert(html.includes('<meta property="og:title" content="Pacto por el bienestar de perros y gatos">'), 'Falta og:title');
+    assert(html.includes(`<meta property="og:url" content="${ORIGIN}${BASE_PATH}/firma/${eventSlug}">`), 'Falta og:url');
+    assert(html.includes('name="twitter:card"'), 'Falta twitter:card');
+    assert(/<title>Pacto por el bienestar de perros y gatos<\/title>/.test(html), 'El título de la página no es el del evento');
+    const admin = await (await anonPage().request.get(`${BASE}/admin`)).text();
+    assert(admin.includes('<meta name="robots" content="noindex, nofollow">') && !admin.includes('og:title'), 'El panel no debería tener vista previa ni indexarse');
   });
   await test('el comprobante muestra folio, huella y firma', async () => {
     await pub.click('text=Ver comprobante en línea');
@@ -642,6 +671,15 @@ async function main() {
     await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
     assert((await intro()).length === 0, 'Los dibujos siguen visibles');
     await v.screenshot({ path: `${SHOTS}/13-sin-contador-ni-dibujos.png`, fullPage: true });
+  });
+
+  await test('compartir en redes se puede desactivar por evento', async () => {
+    await page.uncheck('label:has-text("Invitar a compartir en Instagram y X") input');
+    await page.click('button:has-text("Guardar cambios")');
+    await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
+    const v = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
+    await signThroughUI(v, `${BASE}/firma/${customSlug}`, { name: 'Lucía Benavides', doc: '44332211', email: 'lucia@example.com' });
+    assert(await v.locator('.share').count() === 0, 'Los botones para compartir siguen visibles');
   });
 
   section('8. Seguridad');

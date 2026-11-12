@@ -42,4 +42,10 @@ return [
             . ' ADD COLUMN `show_count` TINYINT(1) NOT NULL DEFAULT 1 AFTER `goal`,'
             . " ADD COLUMN `line_drawings` VARCHAR(10) NOT NULL DEFAULT 'animated' AFTER `show_count`",
     ],
+    7 => [
+        // Compartir en redes (Instagram y X) al terminar la firma.
+        'ALTER TABLE `#__events`'
+            . ' ADD COLUMN `share_enabled` TINYINT(1) NOT NULL DEFAULT 1 AFTER `thanks_message`,'
+            . ' ADD COLUMN `share_text` VARCHAR(280) NULL AFTER `share_enabled`',
+    ],
 ];

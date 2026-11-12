@@ -70,6 +70,8 @@ export type PublicEvent = {
   consentNewsText: string;
   /** title/message en null = textos predeterminados. */
   thanks: { enabled: boolean; title: string | null; message: string | null };
+  /** Compartir en Instagram y X al terminar; text en null = texto predeterminado ({evento} = nombre). */
+  share: { enabled: boolean; text: string | null };
   fields: { optional: Record<OptionalField, boolean>; custom: CustomField[] };
   municipalities: string[];
   codeTtlMinutes: number;

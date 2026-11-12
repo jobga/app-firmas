@@ -74,3 +74,8 @@
 .pub__banner { margin: 0; border-radius: 18px; overflow: hidden; max-width: 560px; box-shadow: var(--shadow-lift); }
 .pub__banner img { display: block; width: 100%; height: auto; max-height: 340px; object-fit: cover; }
 .done__message { font-size: 15px; line-height: 1.55; max-width: 440px; white-space: pre-line; }
+
+.share { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; border-top: 1px solid color-mix(in srgb, var(--form-text, #3D3B36) 12%, var(--form-bg, #fff)); padding-top: 18px; margin-top: 4px; }
+.share__label { font-size: 13px; font-weight: 500; color: var(--form-muted, var(--muted)); }
+.share__buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.share__btn { min-height: 44px; padding: 0 16px; font-size: 14px; }

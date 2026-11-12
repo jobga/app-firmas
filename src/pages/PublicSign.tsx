@@ -6,12 +6,13 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, DEFAULT_THANKS_TITLE, defaultThanksMessage, fmtDate, fmtDateTime, fmtNumber, get, post, type PublicEvent, type Receipt } from '../lib/api';
 import { useAsync } from '../lib/useAsync';
-import { absoluteUrl, apiUrl } from '../lib/base';
+import { apiUrl } from '../lib/base';
 import { AnimalDrawing, CatAndDog, CatMark } from '../components/LineArt';
 import { Icon } from '../components/Icon';
 import { CodeInput } from '../components/CodeInput';
 import { Alert } from '../components/Alert';
 import { SignaturePad, type SignaturePadHandle } from '../components/SignaturePad';
+import { ShareButtons } from '../components/ShareButtons';
 import './PublicSign.css';
 
 // Pasos internos: 1 datos, 2 firma, 3 código por correo (solo si el evento lo pide), 4 listo.
@@ -146,12 +147,6 @@ function SignFlow({ event }: { event: PublicEvent }) {
     await post(`/signatures/${token}/resend`);
     setNotice('Te enviamos un nuevo código. Revisa también la carpeta de spam.');
   });
-
-  const share = async () => {
-    const url = absoluteUrl('/firma/' + event.slug);
-    if (navigator.share) await navigator.share({ title: event.name, url }).catch(() => undefined);
-    else { await navigator.clipboard?.writeText(url); setNotice('Enlace copiado al portapapeles.'); }
-  };
 
   const themeVars = {
     '--ev-bg': colors.bg, '--ev-title': colors.title, '--ev-text': colors.text, '--ev-button': colors.button, '--btn-bg': colors.button,
@@ -373,9 +368,9 @@ function SignFlow({ event }: { event: PublicEvent }) {
                   </div>
                   <div className="btn-row btn-row--center">
                     <a href={apiUrl(`/receipts/${receipt.token ?? token}/pdf`)} className="btn btn--primary" download>Descargar comprobante</a>
-                    <button type="button" className="btn btn--outline" onClick={share}>Compartir convocatoria</button>
                   </div>
                   <Link to={`/comprobante/${receipt.token ?? token}`} className="small">Ver comprobante en línea</Link>
+                  {event.share.enabled && <ShareButtons event={event} onNotice={setNotice} />}
                 </div>
               )}
             </>

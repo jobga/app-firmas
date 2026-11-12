@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS `#__events` (
   `thanks_enabled` TINYINT(1) NOT NULL DEFAULT 1,
   `thanks_title` VARCHAR(255) NULL,
   `thanks_message` TEXT NULL,
+  `share_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `share_text` VARCHAR(280) NULL,
   `created_at` DATETIME NOT NULL,
   `updated_at` DATETIME NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
