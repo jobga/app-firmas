@@ -71,6 +71,12 @@
 .preview__thanks .preview__cta { align-self: stretch; }
 .preview__count { font-size: 12px; }
 .preview__count strong { font-family: var(--font-display); font-size: 18px; font-weight: 500; }
+.share-preview { width: 200px; border-radius: 12px; border: 1px solid var(--line); box-shadow: var(--shadow-lift); }
+.preview__share { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; font-size: 11px; }
+.preview__share > span { display: inline-flex; align-items: center; gap: 4px; border: 1px solid currentColor; border-radius: 8px; padding: 4px 8px; opacity: 0.8; }
+.share-text-preview { margin: 0; font-size: 13px; line-height: 1.5; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; overflow-wrap: anywhere; }
+.share-text-preview svg { vertical-align: -2px; }
+
 
 /* Pestañas de opciones de los campos de lista */
 .field--type { flex: 0 0 auto !important; width: auto; min-width: 140px; }

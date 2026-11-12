@@ -16,6 +16,8 @@ import {
   type AdminEvent, type CustomField, type CustomFieldType, type EventColors, type ListKey, type OptionalField,
 } from '../lib/api';
 import { ConsentText } from './PublicSign';
+import { DEFAULT_SHARE_TEXT, renderShareImage, shareMessage } from '../lib/shareImage';
+import { InstagramGlyph, XGlyph } from '../components/ShareButtons';
 import { contrastRatio } from '../lib/contrast';
 import { absoluteUrl, appUrl } from '../lib/base';
 import './EventConfig.css';
@@ -64,6 +66,7 @@ type Draft = {
   bannerEnabled: boolean; bannerPosition: 'above' | 'below'; bannerAlt: string;
   consentDataText: string; consentNewsEnabled: boolean; consentNewsText: string;
   thanksEnabled: boolean; thanksTitle: string; thanksMessage: string;
+  shareEnabled: boolean; shareText: string;
   optional: Record<OptionalField, boolean>; custom: CustomField[]; lists: Record<ListKey, string[]>; geoDeps: string[];
   codeTtlMinutes: number; maxAttempts: number; requireEmailCode: boolean; emailSubject: string; sendReceipt: boolean;
 };
@@ -81,6 +84,7 @@ const EMPTY: Draft = {
   bannerEnabled: true, bannerPosition: 'below', bannerAlt: '',
   consentDataText: DEFAULT_CONSENT_DATA, consentNewsEnabled: true, consentNewsText: DEFAULT_CONSENT_NEWS,
   thanksEnabled: true, thanksTitle: '', thanksMessage: '',
+  shareEnabled: true, shareText: '',
   optional: { phone: true, birth_date: true, gender: true, municipality: true, zone: true, ethnic_group: true, pets: true, education: false, disability: false },
   custom: [], lists: DEFAULT_LISTS, geoDeps: [],
   codeTtlMinutes: 10, maxAttempts: 3, requireEmailCode: true, emailSubject: 'Tu código para confirmar la firma', sendReceipt: true,
@@ -94,7 +98,8 @@ function fromEvent(e: AdminEvent): Draft {
     colors: { ...DEFAULT_COLORS, ...e.colors },
     bannerEnabled: e.bannerEnabled, bannerPosition: e.bannerPosition, bannerAlt: e.bannerAlt,
     consentDataText: e.consentDataText, consentNewsEnabled: e.consentNewsEnabled, consentNewsText: e.consentNewsText,
-    thanksEnabled: e.thanks.enabled, thanksTitle: e.thanks.title ?? '', thanksMessage: e.thanks.message ?? '', optional: e.fields.optional, custom: e.fields.custom,
+    thanksEnabled: e.thanks.enabled, thanksTitle: e.thanks.title ?? '', thanksMessage: e.thanks.message ?? '',
+    shareEnabled: e.share.enabled, shareText: e.share.text ?? '', optional: e.fields.optional, custom: e.fields.custom,
     lists: { ...DEFAULT_LISTS, ...e.fields.lists }, geoDeps: e.fields.geo.departments,
     codeTtlMinutes: e.codeTtlMinutes, maxAttempts: e.maxAttempts,
     requireEmailCode: e.requireEmailCode, emailSubject: e.emailSubject, sendReceipt: e.sendReceipt,
@@ -114,6 +119,9 @@ export function EventConfig() {
   const [newType, setNewType] = useState<CustomFieldType>('text');
   const [showQr, setShowQr] = useState(false);
   const [previewMode, setPreviewMode] = useState<'form' | 'thanks'>('form');
+  const [shareImg, setShareImg] = useState<string | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  useEffect(() => () => { if (shareImg) URL.revokeObjectURL(shareImg); }, [shareImg]);
 
   useEffect(() => {
     if (isNew) { setEvent(null); setDraft(EMPTY); setLoading(false); return; }
@@ -138,6 +146,7 @@ export function EventConfig() {
       colors, bannerEnabled: draft.bannerEnabled, bannerPosition: draft.bannerPosition, bannerAlt: draft.bannerAlt,
       consentDataText: draft.consentDataText, consentNewsEnabled: draft.consentNewsEnabled, consentNewsText: draft.consentNewsText,
       thanksEnabled: draft.thanksEnabled, thanksTitle: draft.thanksTitle, thanksMessage: draft.thanksMessage,
+      shareEnabled: draft.shareEnabled, shareText: draft.shareText,
       fields: {
         optional: draft.optional,
         custom: draft.custom.map((c) => ({ ...c, options: c.type === 'text' ? [] : cleanLines(c.options) })),
@@ -460,6 +469,38 @@ export function EventConfig() {
           </section>
 
           <section className="card card--roomy">
+            <h2 className="card-title card-title--lg">Compartir en redes</h2>
+            <label className="check-row">
+              <input type="checkbox" checked={draft.shareEnabled} onChange={(e) => { set('shareEnabled', e.target.checked); setPreviewMode('thanks'); }} />
+              <span><strong>Invitar a compartir en Instagram y X al terminar la firma</strong><br />
+                <span className="small muted">Instagram recibe una imagen vertical para historias con el nombre del evento y el enlace (sin datos del firmante). X abre una publicación con el texto y el enlace.</span></span>
+            </label>
+            <fieldset className="verify-toggle__options" disabled={!draft.shareEnabled}>
+              <label className="lbl">Texto para compartir
+                <textarea className="field" rows={2} maxLength={280} placeholder={DEFAULT_SHARE_TEXT} value={draft.shareText} onChange={(e) => set('shareText', e.target.value)} />
+              </label>
+              <span className="small muted" style={{ marginTop: -8 }}>Escribe <code>{'{evento}'}</code> donde quieras el nombre del evento. El enlace se agrega solo. Vacío = texto predeterminado.</span>
+              <p className="share-text-preview"><XGlyph size={14} /> {shareMessage(draft.shareText || DEFAULT_SHARE_TEXT, draft.name)} <span className="muted">{event ? absoluteUrl(`/firma/${event.slug}`) : ''}</span></p>
+              <div className="btn-row" style={{ alignItems: 'flex-start' }}>
+                <button type="button" className="btn btn--outline btn--sm" disabled={shareBusy} onClick={async () => {
+                  setShareBusy(true);
+                  try {
+                    const blob = await renderShareImage({
+                      eventName: draft.name, organization: draft.organization, colors, drawings: draft.lineDrawings,
+                      url: event ? absoluteUrl(`/firma/${event.slug}`) : absoluteUrl('/firma/' + (draft.slug || 'tu-evento')),
+                    });
+                    setShareImg(URL.createObjectURL(blob));
+                  } finally { setShareBusy(false); }
+                }}>
+                  <InstagramGlyph size={16} />{shareImg ? 'Actualizar imagen para Instagram' : 'Ver imagen para Instagram'}
+                </button>
+                {shareImg && <a className="btn btn--ghost btn--sm" href={shareImg} download={`firma-${draft.slug || 'evento'}.png`}>Descargar</a>}
+              </div>
+              {shareImg && <img className="share-preview" src={shareImg} alt="Imagen para compartir en Instagram" />}
+            </fieldset>
+          </section>
+
+          <section className="card card--roomy">
             <h2 className="card-title card-title--lg">Verificación y comprobante</h2>
 
             <div className="verify-toggle verify-toggle--first">
@@ -567,6 +608,13 @@ export function EventConfig() {
                   )}
                   <span className="preview__folio">Folio: AN-000123</span>
                   <span className="preview__cta" style={{ background: colors.button }}>Descargar comprobante</span>
+                  {draft.shareEnabled && (
+                    <span className="preview__share">
+                      <span><InstagramGlyph size={12} /> Instagram</span>
+                      <span><XGlyph size={12} /> X</span>
+                      <span>Copiar enlace</span>
+                    </span>
+                  )}
                 </div>
               )}
             </div>

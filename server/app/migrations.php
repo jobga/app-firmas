@@ -43,6 +43,12 @@ return [
             . " ADD COLUMN `line_drawings` VARCHAR(10) NOT NULL DEFAULT 'animated' AFTER `show_count`",
     ],
     7 => [
+        // Compartir en redes (Instagram y X) al terminar la firma.
+        'ALTER TABLE `#__events`'
+            . ' ADD COLUMN `share_enabled` TINYINT(1) NOT NULL DEFAULT 1 AFTER `thanks_message`,'
+            . ' ADD COLUMN `share_text` VARCHAR(280) NULL AFTER `share_enabled`',
+    ],
+    8 => [
         // Departamento (DIVIPOLA) y listas de caracterización configurables por evento.
         'ALTER TABLE `#__signatures` ADD COLUMN `department` VARCHAR(80) NULL AFTER `gender`',
         'ALTER TABLE `#__signatures` MODIFY `gender` VARCHAR(60) NULL, MODIFY `zone` VARCHAR(60) NULL, MODIFY `ethnic_group` VARCHAR(80) NULL, MODIFY `pets` VARCHAR(255) NULL',
@@ -53,7 +59,7 @@ return [
         'ALTER TABLE `#__events` ADD COLUMN `require_email_code` TINYINT(1) NOT NULL DEFAULT 1 AFTER `max_attempts`',
         "ALTER TABLE `#__signatures` ADD COLUMN `verification` VARCHAR(10) NULL AFTER `hash`",
         "UPDATE `#__signatures` SET `verification` = 'email' WHERE `status` = 'verified' AND `verification` IS NULL",
-        // Instalaciones que ya tenían la caracterización como migración 5 o 6: completa la personalización del evento,
+        // Instalaciones que ya tenían la caracterización como migración 5, 6 o 7: completa la personalización del evento,
         // columna por columna (las que ya existen se omiten).
         "ALTER TABLE `#__events` ADD COLUMN `show_dates` TINYINT(1) NOT NULL DEFAULT 1 AFTER `closes_at`",
         "ALTER TABLE `#__events` ADD COLUMN `banner_path` VARCHAR(255) NULL AFTER `background_path`",
@@ -70,5 +76,8 @@ return [
         // Instalaciones que ya tenían la caracterización como migración 6: completa lo de la 6 de la rama principal.
         "ALTER TABLE `#__events` ADD COLUMN `show_count` TINYINT(1) NOT NULL DEFAULT 1 AFTER `goal`",
         "ALTER TABLE `#__events` ADD COLUMN `line_drawings` VARCHAR(10) NOT NULL DEFAULT 'animated' AFTER `show_count`",
+        // Instalaciones que ya tenían la caracterización como migración 7: completa lo de la 7 de la rama principal.
+        'ALTER TABLE `#__events` ADD COLUMN `share_enabled` TINYINT(1) NOT NULL DEFAULT 1 AFTER `thanks_message`',
+        'ALTER TABLE `#__events` ADD COLUMN `share_text` VARCHAR(280) NULL AFTER `share_enabled`',
     ],
 ];
