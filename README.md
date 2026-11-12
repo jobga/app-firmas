@@ -13,7 +13,7 @@ Plataforma web para recoger firmas verificadas por correo, con caracterización 
 | `/admin/acceso` | Acceso de administrador con contraseña y verificación en dos pasos (QR TOTP + códigos de recuperación), y «¿Olvidaste tu contraseña?» por correo |
 | `/admin/restablecer/<token>` | Crear una contraseña nueva desde el enlace del correo (vence en 1 hora, un solo uso) |
 | `/admin` | Analítica: indicadores, registros por día, embudo, caracterización y últimos registros |
-| `/admin/eventos` | Lista y configuración de eventos con vista previa en vivo: logo, fondo, banner (encima o debajo de la descripción), colores de la página y del formulario, fechas de apertura y cierre (opcionales y visibles o no), campos, textos de autorización, mensaje de agradecimiento y QR del enlace. Cada evento ajusta en pestañas las opciones de sus listas (género, zona, grupo étnico, animales, nivel educativo, discapacidad y campos personalizados de lista u opción múltiple) y los departamentos permitidos |
+| `/admin/eventos` | Lista y configuración de eventos con vista previa en vivo: logo, fondo, banner (encima o debajo de la descripción), colores de la página y del formulario, fechas de apertura y cierre (opcionales y visibles o no), número de firmas verificadas (visible o no), dibujos de líneas (animados, fijos u ocultos), campos, textos de autorización, mensaje de agradecimiento y QR del enlace. Cada evento ajusta en pestañas las opciones de sus listas (género, zona, grupo étnico, animales, nivel educativo, discapacidad y campos personalizados de lista u opción múltiple) y los departamentos permitidos |
 | `/admin/ajustes` | Plataforma, correo SMTP, contraseña, códigos de recuperación y administradores |
 | `/install/` | Asistente de instalación |
 
@@ -115,7 +115,7 @@ sudo bash scripts/setup-local-server.sh
 
 En Windows o macOS puedes usar XAMPP o Laragon: copia el contenido de `release/animalista-firmas/` en la carpeta pública (`htdocs` o `www`), crea una base de datos en phpMyAdmin y abre el sitio en el navegador.
 
-La batería de pruebas de extremo a extremo instala la plataforma desde cero con el asistente y recorre el panel, la firma pública, la seguridad, la exportación, la recuperación de contraseña y el diseño en celular (65 pruebas). Necesita una base de datos **vacía** y Playwright con Chromium. Levanta su propio SMTP de prueba en el puerto 2525 para leer los códigos.
+La batería de pruebas de extremo a extremo instala la plataforma desde cero con el asistente y recorre el panel, la firma pública, la seguridad, la exportación, la recuperación de contraseña y el diseño en celular (67 pruebas). Necesita una base de datos **vacía** y Playwright con Chromium. Levanta su propio SMTP de prueba en el puerto 2525 para leer los códigos.
 
 ```bash
 BASE_URL=http://localhost:8080 DB_NAME=animalista DB_USER=animalista DB_PASS='Firmas#2026' npm run test:e2e

@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS `#__events` (
   `closes_at` DATETIME NULL,
   `show_dates` TINYINT(1) NOT NULL DEFAULT 1,
   `goal` INT UNSIGNED NULL,
+  `show_count` TINYINT(1) NOT NULL DEFAULT 1,
+  `line_drawings` VARCHAR(10) NOT NULL DEFAULT 'animated',
   `colors` TEXT NULL,
   `logo_path` VARCHAR(255) NULL,
   `background_path` VARCHAR(255) NULL,

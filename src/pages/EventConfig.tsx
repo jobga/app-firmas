@@ -59,7 +59,8 @@ const cleanLines = (lines: string[]) => lines.map((l) => l.trim()).filter((l, i,
 
 type Draft = {
   name: string; slug: string; description: string; organization: string; policyUrl: string;
-  scheduleDates: boolean; opensAt: string; closesAt: string; showDates: boolean; goal: string; colors: EventColors;
+  scheduleDates: boolean; opensAt: string; closesAt: string; showDates: boolean; goal: string; showCount: boolean; colors: EventColors;
+  lineDrawings: 'animated' | 'static' | 'hidden';
   bannerEnabled: boolean; bannerPosition: 'above' | 'below'; bannerAlt: string;
   consentDataText: string; consentNewsEnabled: boolean; consentNewsText: string;
   thanksEnabled: boolean; thanksTitle: string; thanksMessage: string;
@@ -75,7 +76,7 @@ const toLocalInput = (iso: string | null) => {
 
 const EMPTY: Draft = {
   name: 'Nuevo evento', slug: '', description: '', organization: '', policyUrl: '',
-  scheduleDates: false, opensAt: '', closesAt: '', showDates: true, goal: '',
+  scheduleDates: false, opensAt: '', closesAt: '', showDates: true, goal: '', showCount: true, lineDrawings: 'animated',
   colors: DEFAULT_COLORS,
   bannerEnabled: true, bannerPosition: 'below', bannerAlt: '',
   consentDataText: DEFAULT_CONSENT_DATA, consentNewsEnabled: true, consentNewsText: DEFAULT_CONSENT_NEWS,
@@ -89,7 +90,7 @@ function fromEvent(e: AdminEvent): Draft {
   return {
     name: e.name, slug: e.slug, description: e.description, organization: e.organization, policyUrl: e.policyUrl,
     scheduleDates: !!(e.opensAt || e.closesAt), opensAt: toLocalInput(e.opensAt), closesAt: toLocalInput(e.closesAt),
-    showDates: e.showDates, goal: e.goal ? String(e.goal) : '',
+    showDates: e.showDates, goal: e.goal ? String(e.goal) : '', showCount: e.showCount, lineDrawings: e.lineDrawings,
     colors: { ...DEFAULT_COLORS, ...e.colors },
     bannerEnabled: e.bannerEnabled, bannerPosition: e.bannerPosition, bannerAlt: e.bannerAlt,
     consentDataText: e.consentDataText, consentNewsEnabled: e.consentNewsEnabled, consentNewsText: e.consentNewsText,
@@ -133,7 +134,7 @@ export function EventConfig() {
       policyUrl: draft.policyUrl,
       opensAt: draft.scheduleDates && draft.opensAt ? new Date(draft.opensAt).toISOString() : '',
       closesAt: draft.scheduleDates && draft.closesAt ? new Date(draft.closesAt).toISOString() : '',
-      showDates: draft.showDates, goal: draft.goal ? Number(draft.goal) : null,
+      showDates: draft.showDates, goal: draft.goal ? Number(draft.goal) : null, showCount: draft.showCount, lineDrawings: draft.lineDrawings,
       colors, bannerEnabled: draft.bannerEnabled, bannerPosition: draft.bannerPosition, bannerAlt: draft.bannerAlt,
       consentDataText: draft.consentDataText, consentNewsEnabled: draft.consentNewsEnabled, consentNewsText: draft.consentNewsText,
       thanksEnabled: draft.thanksEnabled, thanksTitle: draft.thanksTitle, thanksMessage: draft.thanksMessage,
@@ -270,7 +271,14 @@ export function EventConfig() {
                 </>
               )}
             </div>
-            <label className="lbl" style={{ maxWidth: 240 }}>Meta de firmas<input className="field" type="number" min={1} placeholder="Opcional" value={draft.goal} onChange={(e) => set('goal', e.target.value)} /></label>
+            <div className="option-block">
+              <label className="check-row">
+                <input type="checkbox" checked={draft.showCount} onChange={(e) => set('showCount', e.target.checked)} />
+                <span><strong>Mostrar el número de firmas verificadas</strong><br />
+                  <span className="small muted">Si lo ocultas, la página pública tampoco muestra la barra de avance hacia la meta.</span></span>
+              </label>
+              <label className="lbl" style={{ maxWidth: 240 }}>Meta de firmas<input className="field" type="number" min={1} placeholder="Opcional" value={draft.goal} onChange={(e) => set('goal', e.target.value)} /></label>
+            </div>
           </section>
 
           <section className="card card--roomy">
@@ -329,6 +337,16 @@ export function EventConfig() {
                   )}
                 </>
               ) : <p className="small muted">Guarda el evento para subir el banner.</p>}
+            </div>
+
+            <div className="option-block">
+              <label className="lbl" style={{ maxWidth: 360 }}>Dibujos de líneas (gato y perro)
+                <select className="field" value={draft.lineDrawings} onChange={(e) => set('lineDrawings', e.target.value as Draft['lineDrawings'])}>
+                  <option value="animated">Mostrar con animación del trazo</option>
+                  <option value="static">Mostrar sin animación</option>
+                  <option value="hidden">No mostrar</option>
+                </select>
+              </label>
             </div>
 
             <h3 className="card-title">Colores de la página</h3>
@@ -503,11 +521,17 @@ export function EventConfig() {
               {draft.organization || 'Logo del evento'}
             </div>
             <div className="preview__body">
-              <AnimalDrawing animal="dog" color={colors.button} style={{ width: 96, height: 96 }} />
+              {draft.lineDrawings !== 'hidden' && <AnimalDrawing animal="dog" color={colors.button} animated={draft.lineDrawings === 'animated'} style={{ width: 96, height: 96 }} />}
               <h3 className="preview__title" style={{ color: colors.title }}>{draft.name}</h3>
               {draft.bannerPosition === 'above' && banner}
               <p className="preview__desc" style={{ color: colors.text }}>{draft.description}</p>
               {draft.bannerPosition === 'below' && banner}
+              {draft.showCount && (
+                <p className="preview__count" style={{ color: colors.title }}>
+                  <strong>{(event?.verifiedCount ?? 0).toLocaleString('es-CO')}</strong>
+                  <span style={{ color: colors.text }}> firmas verificadas{draft.goal ? ` de ${Number(draft.goal).toLocaleString('es-CO')}` : ''}</span>
+                </p>
+              )}
               {draft.scheduleDates && draft.showDates && (draft.opensAt || draft.closesAt) && (
                 <p className="preview__dates" style={{ color: colors.text }}>
                   {draft.opensAt && <span>Apertura: {new Date(draft.opensAt).toLocaleDateString('es-CO', { dateStyle: 'medium' })}</span>}
@@ -534,7 +558,7 @@ export function EventConfig() {
                 </div>
               ) : (
                 <div className="preview__form preview__thanks" style={{ background: colors.formBg, color: colors.formText }}>
-                  <AnimalDrawing animal="cat" color={colors.button} style={{ width: 64, height: 64 }} />
+                  {draft.lineDrawings !== 'hidden' && <AnimalDrawing animal="cat" color={colors.button} animated={draft.lineDrawings === 'animated'} style={{ width: 64, height: 64 }} />}
                   {draft.thanksEnabled && (
                     <>
                       <strong style={{ color: colors.formTitle }}>{draft.thanksTitle || DEFAULT_THANKS_TITLE}</strong>

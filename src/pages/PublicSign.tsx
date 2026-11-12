@@ -126,7 +126,9 @@ function SignFlow({ event }: { event: PublicEvent }) {
   const municipalities = allowedDeps.find((d) => d.code === department)?.municipalities ?? [];
 
   const policyHref = event.policyUrl || '#politica';
-  const progress = event.goal ? Math.min(100, (event.verifiedCount / event.goal) * 100) : null;
+  const progress = event.showCount && event.goal && event.verifiedCount !== null ? Math.min(100, (event.verifiedCount / event.goal) * 100) : null;
+  const drawings = event.lineDrawings;
+  const showDateStats = event.showDates && (event.opensAt || event.closesAt);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true); setErr(null); setNotice(null);
@@ -210,17 +212,23 @@ function SignFlow({ event }: { event: PublicEvent }) {
           {event.banner?.position === 'above' && <Banner banner={event.banner} />}
           {event.description && <p className="pub__desc">{event.description}</p>}
           {event.banner?.position === 'below' && <Banner banner={event.banner} />}
-          <div className="pub__stats">
-            <div className="pub__stat"><strong>{fmtNumber(event.verifiedCount)}</strong>firmas verificadas{event.goal ? ` de ${fmtNumber(event.goal)}` : ''}</div>
-            {event.showDates && event.opensAt && <div className="pub__stat"><strong>{fmtDate(event.opensAt)}</strong>apertura de la convocatoria</div>}
-            {event.showDates && event.closesAt && <div className="pub__stat"><strong>{fmtDate(event.closesAt)}</strong>cierre de la convocatoria</div>}
-          </div>
+          {(event.showCount || showDateStats) && (
+            <div className="pub__stats">
+              {event.showCount && event.verifiedCount !== null && (
+                <div className="pub__stat"><strong>{fmtNumber(event.verifiedCount)}</strong>firmas verificadas{event.goal ? ` de ${fmtNumber(event.goal)}` : ''}</div>
+              )}
+              {event.showDates && event.opensAt && <div className="pub__stat"><strong>{fmtDate(event.opensAt)}</strong>apertura de la convocatoria</div>}
+              {event.showDates && event.closesAt && <div className="pub__stat"><strong>{fmtDate(event.closesAt)}</strong>cierre de la convocatoria</div>}
+            </div>
+          )}
           {progress !== null && (
             <div className="pub__goal" role="progressbar" aria-label="Avance hacia la meta" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}>
               <div style={{ width: `${progress}%` }} />
             </div>
           )}
-          <CatAndDog catColor={colors.title} dogColor={colors.button} style={{ width: '100%', maxWidth: 460, height: 'auto' }} />
+          {drawings !== 'hidden' && (
+            <CatAndDog catColor={colors.title} dogColor={colors.button} animated={drawings === 'animated'} style={{ width: '100%', maxWidth: 460, height: 'auto' }} />
+          )}
         </section>
 
         <section aria-label="Formulario de firma" className="pub__panel">
@@ -396,7 +404,9 @@ function SignFlow({ event }: { event: PublicEvent }) {
 
               {step === 4 && receipt && (
                 <div className="step done rise">
-                  <AnimalDrawing animal="cat" color={colors.button} label="Gato dibujado en una sola línea" style={{ width: 160, height: 160 }} />
+                  {drawings !== 'hidden' && (
+                    <AnimalDrawing animal="cat" color={colors.button} animated={drawings === 'animated'} label="Gato dibujado en una sola línea" style={{ width: 160, height: 160 }} />
+                  )}
                   {event.thanks.enabled && (
                     <>
                       <h2 className="step__title" style={{ fontSize: 28 }}>{event.thanks.title ?? DEFAULT_THANKS_TITLE}</h2>

@@ -32,15 +32,17 @@ type DrawingProps = StrokeProps & {
   animal: 'cat' | 'dog';
   label?: string;
   slow?: boolean;
+  /** false: el dibujo aparece completo, sin la animación del trazo. */
+  animated?: boolean;
 } & Omit<SVGProps<SVGSVGElement>, 'color'>;
 
 /** Single animal drawn with an animated "one line" stroke. */
-export function AnimalDrawing({ animal, color, strokeWidth = 3, label, slow, className, ...rest }: DrawingProps) {
+export function AnimalDrawing({ animal, color, strokeWidth = 3, label, slow, animated = true, className, ...rest }: DrawingProps) {
   const a11y = label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true };
   return (
     <svg
       viewBox={animal === 'dog' ? '0 0 220 200' : '0 0 200 200'}
-      className={['draw', slow && 'draw--slow', className].filter(Boolean).join(' ')}
+      className={[animated && 'draw', animated && slow && 'draw--slow', className].filter(Boolean).join(' ') || undefined}
       {...a11y}
       {...rest}
     >
@@ -50,9 +52,9 @@ export function AnimalDrawing({ animal, color, strokeWidth = 3, label, slow, cla
 }
 
 /** Cat and dog side by side, drawn in sequence. */
-export function CatAndDog({ catColor, dogColor, style }: { catColor: string; dogColor: string; style?: React.CSSProperties }) {
+export function CatAndDog({ catColor, dogColor, style, animated = true }: { catColor: string; dogColor: string; style?: React.CSSProperties; animated?: boolean }) {
   return (
-    <svg className="draw" viewBox="0 0 420 200" role="img" aria-label="Dibujo de un gato y un perro en una sola línea" style={style}>
+    <svg className={animated ? 'draw' : undefined} viewBox="0 0 420 200" role="img" aria-label="Dibujo de un gato y un perro en una sola línea" style={style}>
       <path d={CAT_PATH} {...strokeAttrs(catColor, 2)} />
       <path className="delayed" transform="translate(200 0)" d={DOG_PATH} {...strokeAttrs(dogColor, 2)} />
     </svg>

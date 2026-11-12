@@ -677,6 +677,46 @@ async function main() {
     const ev = await (await ctx.request.get(`${BASE}/api/events/${customSlug}`)).json();
     assert(ev.opensAt === null && ev.closesAt === null && ev.isOpen === true, `Fechas: ${ev.opensAt} / ${ev.closesAt}`);
   });
+  await test('el número de firmas verificadas se puede ocultar (la API tampoco lo revela)', async () => {
+    const v = await (await browser.newContext()).newPage();
+    await v.goto(`${BASE}/firma/${customSlug}`);
+    await v.waitForSelector('text=Tus datos');
+    assert(await v.locator('text=firmas verificadas').count() === 1, 'El contador debería verse por defecto');
+    await page.uncheck('label:has-text("Mostrar el número de firmas verificadas") input');
+    await page.fill('label:has-text("Meta de firmas") input', '50');
+    await page.click('button:has-text("Guardar cambios")');
+    await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
+    await v.reload();
+    await v.waitForSelector('text=Tus datos');
+    assert(await v.locator('text=firmas verificadas').count() === 0, 'El contador sigue visible');
+    assert(await v.locator('.pub__goal').count() === 0, 'La barra de avance revela el contador');
+    const pub = await (await browser.newContext()).request.get(`${BASE}/api/events/${customSlug}`);
+    assert((await pub.json()).verifiedCount === null, 'La API pública revela el número de firmas');
+    const adm = await (await ctx.request.get(`${BASE}/api/admin/events/${(await pub.json()).id}`)).json();
+    assert(adm.verifiedCount === 2, `El panel debería seguir viendo el número: ${adm.verifiedCount}`);
+  });
+  await test('los dibujos de líneas pueden ir animados, fijos u ocultos', async () => {
+    const v = await (await browser.newContext()).newPage();
+    const intro = async () => {
+      await v.goto(`${BASE}/firma/${customSlug}`);
+      await v.waitForSelector('text=Tus datos');
+      return v.$$eval('.pub__intro svg', (els) => els.map((e) => e.getAttribute('class') ?? ''));
+    };
+    assert((await intro()).join() === 'draw', 'Por defecto deberían estar animados');
+    const select = page.locator('label:has-text("Dibujos de líneas") select');
+    await select.selectOption('static');
+    await page.click('button:has-text("Guardar cambios")');
+    await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
+    const fixed = await intro();
+    assert(fixed.length === 1 && fixed[0] === '', `Sin animación debería verse el dibujo sin la clase draw: ${fixed}`);
+    const dash = await v.$eval('.pub__intro svg path', (p) => getComputedStyle(p).strokeDashoffset);
+    assert(dash === '0px' || dash === '0', `El trazo no debería estar oculto: ${dash}`);
+    await select.selectOption('hidden');
+    await page.click('button:has-text("Guardar cambios")');
+    await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
+    assert((await intro()).length === 0, 'Los dibujos siguen visibles');
+    await v.screenshot({ path: `${SHOTS}/13-sin-contador-ni-dibujos.png`, fullPage: true });
+  });
 
   section('8. Seguridad');
   const anon = await browser.newContext();
