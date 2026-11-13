@@ -658,7 +658,7 @@ async function main() {
       return v.$$eval('.pub__intro svg', (els) => els.map((e) => e.getAttribute('class') ?? ''));
     };
     assert((await intro()).join() === 'draw', 'Por defecto deberían estar animados');
-    const select = page.locator('label:has-text("Dibujos de líneas") select');
+    const select = page.locator('label', { hasText: /^Dibujos de líneas/ }).locator('select');
     await select.selectOption('static');
     await page.click('button:has-text("Guardar cambios")');
     await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
@@ -673,8 +673,33 @@ async function main() {
     await v.screenshot({ path: `${SHOTS}/13-sin-contador-ni-dibujos.png`, fullPage: true });
   });
 
+  await test('la imagen para Instagram y las redes se configuran, con vista previa en vivo', async () => {
+    await page.waitForSelector('img.share-preview');
+    const before = await page.getAttribute('img.share-preview', 'src');
+    await page.fill('input[placeholder="YO FIRMÉ"]', 'Me sumé');
+    await page.fill('textarea[placeholder="p. ej. Ya somos más de mil firmantes"]', 'Firma antes del cierre.');
+    await page.fill('input[placeholder="Firma tú también"]', 'Tu firma cuenta');
+    await page.selectOption('label:has-text("Imagen central") select', 'banner');
+    await page.waitForFunction((b) => document.querySelector('img.share-preview')?.getAttribute('src') !== b, before);
+    await page.uncheck('.chip:has-text("X") input');
+    assert(await page.locator('textarea[placeholder^="Ya firmé por"]').count() === 0, 'El texto de X debería ocultarse si X está desactivado');
+    await page.click('button:has-text("Guardar cambios")');
+    await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
+    const ev = await (await ctx.request.get(`${BASE}/api/events/${customSlug}`)).json();
+    assert(ev.share.networks.x === false && ev.share.networks.instagram === true, `Redes: ${JSON.stringify(ev.share.networks)}`);
+    assert(ev.share.image.kicker === 'Me sumé' && ev.share.image.cta === 'Tu firma cuenta' && ev.share.image.visual === 'banner', `Imagen: ${JSON.stringify(ev.share.image)}`);
+    await page.screenshot({ path: `${SHOTS}/15-compartir-config.png`, fullPage: true });
+    const v = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
+    await signThroughUI(v, `${BASE}/firma/${customSlug}`, { name: 'Andrés Muñoz', doc: '11223344', email: 'andres@example.com' });
+    assert(await v.locator('.share button:has-text("Instagram")').count() === 1, 'Falta el botón de Instagram');
+    assert(await v.locator('.share a:has-text("X")').count() === 0, 'El botón de X debería estar oculto');
+    const [download] = await Promise.all([v.waitForEvent('download'), v.click('.share button:has-text("Instagram")')]);
+    const png = await (await import('node:fs/promises')).readFile(await download.path());
+    assert(png.readUInt32BE(16) === 1080 && png.readUInt32BE(20) === 1920, 'La imagen no mide 1080×1920');
+    await (await import('node:fs/promises')).writeFile(`${SHOTS}/16-imagen-instagram-configurada.png`, png);
+  });
   await test('compartir en redes se puede desactivar por evento', async () => {
-    await page.uncheck('label:has-text("Invitar a compartir en Instagram y X") input');
+    await page.uncheck('label:has-text("Habilitar compartir en redes al terminar la firma") input');
     await page.click('button:has-text("Guardar cambios")');
     await page.waitForSelector('.alert--ok:has-text("Evento publicado")');
     const v = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();

@@ -15,7 +15,10 @@ import {
   type AdminEvent, type CustomField, type EventColors, type OptionalField,
 } from '../lib/api';
 import { ConsentText } from './PublicSign';
-import { DEFAULT_SHARE_TEXT, renderShareImage, shareMessage } from '../lib/shareImage';
+import {
+  DEFAULT_SHARE_CTA, DEFAULT_SHARE_IMAGE, DEFAULT_SHARE_KICKER, DEFAULT_SHARE_TEXT, renderShareImage, shareMessage,
+  type ShareImageOptions, type ShareVisual,
+} from '../lib/shareImage';
 import { InstagramGlyph, XGlyph } from '../components/ShareButtons';
 import { contrastRatio } from '../lib/contrast';
 import { absoluteUrl, appUrl } from '../lib/base';
@@ -47,6 +50,7 @@ type Draft = {
   consentDataText: string; consentNewsEnabled: boolean; consentNewsText: string;
   thanksEnabled: boolean; thanksTitle: string; thanksMessage: string;
   shareEnabled: boolean; shareText: string;
+  shareOptions: { networks: { instagram: boolean; x: boolean; copy: boolean }; image: ShareImageOptions };
   optional: Record<OptionalField, boolean>; custom: CustomField[]; municipalities: string;
   codeTtlMinutes: number; maxAttempts: number; requireEmailCode: boolean; emailSubject: string; sendReceipt: boolean;
 };
@@ -65,6 +69,7 @@ const EMPTY: Draft = {
   consentDataText: DEFAULT_CONSENT_DATA, consentNewsEnabled: true, consentNewsText: DEFAULT_CONSENT_NEWS,
   thanksEnabled: true, thanksTitle: '', thanksMessage: '',
   shareEnabled: true, shareText: '',
+  shareOptions: { networks: { instagram: true, x: true, copy: true }, image: DEFAULT_SHARE_IMAGE },
   optional: { phone: true, birth_date: true, gender: true, municipality: true, zone: true, ethnic_group: true, pets: true, education: false, disability: false },
   custom: [], municipalities: 'Pasto\nIpiales\nTumaco\nTúquerres\nOtro',
   codeTtlMinutes: 10, maxAttempts: 3, requireEmailCode: true, emailSubject: 'Tu código para confirmar la firma', sendReceipt: true,
@@ -79,7 +84,8 @@ function fromEvent(e: AdminEvent): Draft {
     bannerEnabled: e.bannerEnabled, bannerPosition: e.bannerPosition, bannerAlt: e.bannerAlt,
     consentDataText: e.consentDataText, consentNewsEnabled: e.consentNewsEnabled, consentNewsText: e.consentNewsText,
     thanksEnabled: e.thanks.enabled, thanksTitle: e.thanks.title ?? '', thanksMessage: e.thanks.message ?? '',
-    shareEnabled: e.share.enabled, shareText: e.share.text ?? '', optional: e.fields.optional, custom: e.fields.custom, municipalities: e.municipalities.join('\n'),
+    shareEnabled: e.share.enabled, shareText: e.share.text ?? '',
+    shareOptions: { networks: e.share.networks, image: e.share.image }, optional: e.fields.optional, custom: e.fields.custom, municipalities: e.municipalities.join('\n'),
     codeTtlMinutes: e.codeTtlMinutes, maxAttempts: e.maxAttempts,
     requireEmailCode: e.requireEmailCode, emailSubject: e.emailSubject, sendReceipt: e.sendReceipt,
   };
@@ -112,6 +118,9 @@ export function EventConfig() {
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const { colors } = draft;
+  const img = draft.shareOptions.image;
+  const setImage = (patch: Partial<ShareImageOptions>) => setDraft((d) => ({ ...d, shareOptions: { ...d.shareOptions, image: { ...d.shareOptions.image, ...patch } } }));
+  const setNetwork = (k: 'instagram' | 'x' | 'copy', v: boolean) => setDraft((d) => ({ ...d, shareOptions: { ...d.shareOptions, networks: { ...d.shareOptions.networks, [k]: v } } }));
 
   const save = async (status: 'draft' | 'published') => {
     setBusy(true); setMsg(null);
@@ -124,7 +133,7 @@ export function EventConfig() {
       colors, bannerEnabled: draft.bannerEnabled, bannerPosition: draft.bannerPosition, bannerAlt: draft.bannerAlt,
       consentDataText: draft.consentDataText, consentNewsEnabled: draft.consentNewsEnabled, consentNewsText: draft.consentNewsText,
       thanksEnabled: draft.thanksEnabled, thanksTitle: draft.thanksTitle, thanksMessage: draft.thanksMessage,
-      shareEnabled: draft.shareEnabled, shareText: draft.shareText, fields: { optional: draft.optional, custom: draft.custom },
+      shareEnabled: draft.shareEnabled, shareText: draft.shareText, shareOptions: draft.shareOptions, fields: { optional: draft.optional, custom: draft.custom },
       municipalities: draft.municipalities.split('\n').map((m) => m.trim()).filter(Boolean),
       codeTtlMinutes: draft.codeTtlMinutes, maxAttempts: draft.maxAttempts,
       requireEmailCode: draft.requireEmailCode, emailSubject: draft.emailSubject, sendReceipt: draft.sendReceipt,
@@ -178,6 +187,26 @@ export function EventConfig() {
     set('custom', [...draft.custom, { label, required: false }]);
     setNewField('');
   };
+
+  // Vista previa en vivo de la imagen para Instagram (se regenera al cambiar textos, colores o imágenes).
+  const shareUrl = event ? absoluteUrl(`/firma/${event.slug}`) : absoluteUrl('/firma/' + (draft.slug || 'tu-evento'));
+  const shareInputKey = JSON.stringify([draft.name, draft.organization, colors, img, shareUrl, event?.bannerUrl, event?.logoUrl, draft.shareEnabled && draft.shareOptions.networks.instagram]);
+  useEffect(() => {
+    if (!draft.shareEnabled || !draft.shareOptions.networks.instagram) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      setShareBusy(true);
+      try {
+        const blob = await renderShareImage({
+          eventName: draft.name, organization: draft.organization, url: shareUrl, colors, options: img,
+          bannerUrl: event?.bannerUrl ?? null, logoUrl: event?.logoUrl ?? null,
+        });
+        if (alive) setShareImg(URL.createObjectURL(blob));
+      } catch { /* sin vista previa */ } finally { if (alive) setShareBusy(false); }
+    }, 350);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareInputKey]);
 
   const rText = contrastRatio(colors.text, colors.bg);
   const rButton = contrastRatio('#FFFFFF', colors.button);
@@ -442,31 +471,67 @@ export function EventConfig() {
             <h2 className="card-title card-title--lg">Compartir en redes</h2>
             <label className="check-row">
               <input type="checkbox" checked={draft.shareEnabled} onChange={(e) => { set('shareEnabled', e.target.checked); setPreviewMode('thanks'); }} />
-              <span><strong>Invitar a compartir en Instagram y X al terminar la firma</strong><br />
-                <span className="small muted">Instagram recibe una imagen vertical para historias con el nombre del evento y el enlace (sin datos del firmante). X abre una publicación con el texto y el enlace.</span></span>
+              <span><strong>Habilitar compartir en redes al terminar la firma</strong><br />
+                <span className="small muted">Si lo desactivas, la pantalla final no muestra ningún botón para compartir.</span></span>
             </label>
             <fieldset className="verify-toggle__options" disabled={!draft.shareEnabled}>
-              <label className="lbl">Texto para compartir
-                <textarea className="field" rows={2} maxLength={280} placeholder={DEFAULT_SHARE_TEXT} value={draft.shareText} onChange={(e) => set('shareText', e.target.value)} />
-              </label>
-              <span className="small muted" style={{ marginTop: -8 }}>Escribe <code>{'{evento}'}</code> donde quieras el nombre del evento. El enlace se agrega solo. Vacío = texto predeterminado.</span>
-              <p className="share-text-preview"><XGlyph size={14} /> {shareMessage(draft.shareText || DEFAULT_SHARE_TEXT, draft.name)} <span className="muted">{event ? absoluteUrl(`/firma/${event.slug}`) : ''}</span></p>
-              <div className="btn-row" style={{ alignItems: 'flex-start' }}>
-                <button type="button" className="btn btn--outline btn--sm" disabled={shareBusy} onClick={async () => {
-                  setShareBusy(true);
-                  try {
-                    const blob = await renderShareImage({
-                      eventName: draft.name, organization: draft.organization, colors, drawings: draft.lineDrawings,
-                      url: event ? absoluteUrl(`/firma/${event.slug}`) : absoluteUrl('/firma/' + (draft.slug || 'tu-evento')),
-                    });
-                    setShareImg(URL.createObjectURL(blob));
-                  } finally { setShareBusy(false); }
-                }}>
-                  <InstagramGlyph size={16} />{shareImg ? 'Actualizar imagen para Instagram' : 'Ver imagen para Instagram'}
-                </button>
-                {shareImg && <a className="btn btn--ghost btn--sm" href={shareImg} download={`firma-${draft.slug || 'evento'}.png`}>Descargar</a>}
+              <div>
+                <span className="lbl" style={{ marginBottom: 8 }}>Botones que se muestran</span>
+                <div className="chips">
+                  <label className="chip"><input type="checkbox" checked={draft.shareOptions.networks.instagram} onChange={(e) => setNetwork('instagram', e.target.checked)} /> <InstagramGlyph size={15} /> Instagram</label>
+                  <label className="chip"><input type="checkbox" checked={draft.shareOptions.networks.x} onChange={(e) => setNetwork('x', e.target.checked)} /> <XGlyph size={15} /> X</label>
+                  <label className="chip"><input type="checkbox" checked={draft.shareOptions.networks.copy} onChange={(e) => setNetwork('copy', e.target.checked)} /> Copiar enlace</label>
+                </div>
               </div>
-              {shareImg && <img className="share-preview" src={shareImg} alt="Imagen para compartir en Instagram" />}
+
+              {draft.shareOptions.networks.instagram && (
+                <div className="option-block share-image-editor">
+                  <h3 className="card-title"><InstagramGlyph size={16} /> Imagen para Instagram (historias, 1080 × 1920)</h3>
+                  <div className="share-image-editor__grid">
+                    <div className="share-image-editor__fields">
+                      <label className="lbl">Texto superior
+                        <input className="field" maxLength={40} placeholder={DEFAULT_SHARE_KICKER} value={img.kicker ?? ''} onChange={(e) => setImage({ kicker: e.target.value || null })} />
+                      </label>
+                      <label className="lbl">Título
+                        <textarea className="field" rows={2} maxLength={160} placeholder={draft.name} value={img.title ?? ''} onChange={(e) => setImage({ title: e.target.value || null })} />
+                      </label>
+                      <label className="lbl">Mensaje (opcional)
+                        <textarea className="field" rows={2} maxLength={160} placeholder="p. ej. Ya somos más de mil firmantes" value={img.message ?? ''} onChange={(e) => setImage({ message: e.target.value || null })} />
+                      </label>
+                      <label className="lbl">Llamado a la acción
+                        <input className="field" maxLength={60} placeholder={DEFAULT_SHARE_CTA} value={img.cta ?? ''} onChange={(e) => setImage({ cta: e.target.value || null })} />
+                      </label>
+                      <label className="lbl">Imagen central
+                        <select className="field" value={img.visual} onChange={(e) => setImage({ visual: e.target.value as ShareVisual })}>
+                          <option value="drawings">Dibujos de líneas (gato y perro)</option>
+                          <option value="banner" disabled={!bannerUrl}>Banner del evento{bannerUrl ? '' : ' (sube uno primero)'}</option>
+                          <option value="logo" disabled={!event?.logoUrl}>Logo{event?.logoUrl ? '' : ' (sube uno primero)'}</option>
+                          <option value="none">Ninguna (texto centrado)</option>
+                        </select>
+                      </label>
+                      <label className="check-row"><input type="checkbox" checked={img.showOrganization} onChange={(e) => setImage({ showOrganization: e.target.checked })} /> Mostrar la organización</label>
+                      <label className="check-row"><input type="checkbox" checked={img.showUrl} onChange={(e) => setImage({ showUrl: e.target.checked })} /> Mostrar el enlace del evento</label>
+                      <span className="small muted">Deja un texto vacío para usar el predeterminado. Instagram tapa la franja superior e inferior de las historias: el diseño deja ese espacio libre.</span>
+                    </div>
+                    <figure className="share-preview-wrap">
+                      {shareImg ? <img className="share-preview" src={shareImg} alt="Vista previa de la imagen para Instagram" /> : <div className="share-preview share-preview--empty">Generando…</div>}
+                      <figcaption className="small muted">Vista previa {shareBusy ? '· actualizando…' : ''}</figcaption>
+                      {shareImg && <a className="btn btn--outline btn--sm" href={shareImg} download={`firma-${draft.slug || 'evento'}.png`}>Descargar imagen</a>}
+                    </figure>
+                  </div>
+                </div>
+              )}
+
+              {draft.shareOptions.networks.x && (
+                <div className="option-block">
+                  <h3 className="card-title"><XGlyph size={15} /> Publicación en X</h3>
+                  <label className="lbl">Texto de la publicación
+                    <textarea className="field" rows={2} maxLength={280} placeholder={DEFAULT_SHARE_TEXT} value={draft.shareText} onChange={(e) => set('shareText', e.target.value)} />
+                  </label>
+                  <span className="small muted" style={{ marginTop: -8 }}>Escribe <code>{'{evento}'}</code> donde quieras el nombre del evento. El enlace se agrega solo. Vacío = texto predeterminado.</span>
+                  <p className="share-text-preview"><XGlyph size={14} /> {shareMessage(draft.shareText || DEFAULT_SHARE_TEXT, draft.name)} <span className="muted">{event ? absoluteUrl(`/firma/${event.slug}`) : ''}</span></p>
+                </div>
+              )}
             </fieldset>
           </section>
 
@@ -580,9 +645,9 @@ export function EventConfig() {
                   <span className="preview__cta" style={{ background: colors.button }}>Descargar comprobante</span>
                   {draft.shareEnabled && (
                     <span className="preview__share">
-                      <span><InstagramGlyph size={12} /> Instagram</span>
-                      <span><XGlyph size={12} /> X</span>
-                      <span>Copiar enlace</span>
+                      {draft.shareOptions.networks.instagram && <span><InstagramGlyph size={12} /> Instagram</span>}
+                      {draft.shareOptions.networks.x && <span><XGlyph size={12} /> X</span>}
+                      {draft.shareOptions.networks.copy && <span>Copiar enlace</span>}
                     </span>
                   )}
                 </div>

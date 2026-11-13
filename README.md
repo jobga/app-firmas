@@ -8,7 +8,7 @@ Plataforma web para recoger firmas verificadas por correo, con caracterización 
 
 | Ruta | Pantalla |
 | --- | --- |
-| `/` y `/firma/<enlace>` | Registro público: datos → firma dibujada → código de 6 dígitos por correo → comprobante. Al terminar, la persona puede compartir la convocatoria en Instagram (imagen vertical para historias, sin datos personales) y en X (publicación con texto y enlace); el enlace del evento incluye vista previa para redes (Open Graph). El código por correo se puede desactivar en cada evento (*Eventos → Verificación y comprobante*); esas firmas quedan marcadas como «Sin código» |
+| `/` y `/firma/<enlace>` | Registro público: datos → firma dibujada → código de 6 dígitos por correo → comprobante. Al terminar, la persona puede compartir la convocatoria en Instagram (imagen vertical para historias, sin datos personales) y en X (publicación con texto y enlace); el enlace del evento incluye vista previa para redes (Open Graph). Compartir se habilita o no por evento, se elige qué botones aparecen (Instagram, X, Copiar enlace) y se configuran los textos e imagen central de la imagen, con vista previa en vivo. El código por correo se puede desactivar en cada evento (*Eventos → Verificación y comprobante*); esas firmas quedan marcadas como «Sin código» |
 | `/comprobante/<token>` | Comprobante en línea y en PDF (folio, fecha, huella SHA-256 y firma); el PDF también llega adjunto al correo |
 | `/admin/acceso` | Acceso de administrador con contraseña y verificación en dos pasos (QR TOTP + códigos de recuperación), y «¿Olvidaste tu contraseña?» por correo |
 | `/admin/restablecer/<token>` | Crear una contraseña nueva desde el enlace del correo (vence en 1 hora, un solo uso) |
@@ -111,7 +111,7 @@ sudo bash scripts/setup-local-server.sh
 
 En Windows o macOS puedes usar XAMPP o Laragon: copia el contenido de `release/animalista-firmas/` en la carpeta pública (`htdocs` o `www`), crea una base de datos en phpMyAdmin y abre el sitio en el navegador.
 
-La batería de pruebas de extremo a extremo instala la plataforma desde cero con el asistente y recorre el panel, la firma pública, la seguridad, la exportación, la recuperación de contraseña y el diseño en celular (70 pruebas). Necesita una base de datos **vacía** y Playwright con Chromium. Levanta su propio SMTP de prueba en el puerto 2525 para leer los códigos.
+La batería de pruebas de extremo a extremo instala la plataforma desde cero con el asistente y recorre el panel, la firma pública, la seguridad, la exportación, la recuperación de contraseña y el diseño en celular (71 pruebas). Necesita una base de datos **vacía** y Playwright con Chromium. Levanta su propio SMTP de prueba en el puerto 2525 para leer los códigos.
 
 ```bash
 BASE_URL=http://localhost:8080 DB_NAME=animalista DB_USER=animalista DB_PASS='Firmas#2026' npm run test:e2e

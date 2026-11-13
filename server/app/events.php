@@ -35,6 +35,40 @@ const DEFAULT_CONSENT_NEWS = 'Acepto recibir información sobre los resultados d
 const DEFAULT_THANKS_TITLE = '¡Gracias! Tu firma quedó registrada';
 /** {evento} se reemplaza por el nombre del evento. */
 const DEFAULT_SHARE_TEXT = 'Ya firmé por «{evento}». ¡Súmate tú también!';
+/** Redes habilitadas y diseño de la imagen para compartir. En los textos, null = predeterminado. */
+const DEFAULT_SHARE_OPTIONS = [
+    'networks' => ['instagram' => true, 'x' => true, 'copy' => true],
+    'image' => [
+        'kicker' => null, 'title' => null, 'message' => null, 'cta' => null,
+        'visual' => 'drawings', 'showOrganization' => true, 'showUrl' => true,
+    ],
+];
+const SHARE_IMAGE_LIMITS = ['kicker' => 40, 'title' => 160, 'message' => 160, 'cta' => 60];
+
+function share_options(array $e): array
+{
+    $o = json_decode((string)($e['share_options'] ?? ''), true) ?: [];
+    return [
+        'networks' => array_merge(DEFAULT_SHARE_OPTIONS['networks'], array_intersect_key((array)($o['networks'] ?? []), DEFAULT_SHARE_OPTIONS['networks'])),
+        'image' => array_merge(DEFAULT_SHARE_OPTIONS['image'], array_intersect_key((array)($o['image'] ?? []), DEFAULT_SHARE_OPTIONS['image'])),
+    ];
+}
+
+function share_options_from_input(mixed $in): string
+{
+    $in = is_array($in) ? $in : [];
+    $out = DEFAULT_SHARE_OPTIONS;
+    foreach ($out['networks'] as $k => $_) $out['networks'][$k] = !empty($in['networks'][$k] ?? DEFAULT_SHARE_OPTIONS['networks'][$k]);
+    $img = (array)($in['image'] ?? []);
+    foreach (SHARE_IMAGE_LIMITS as $k => $max) {
+        $v = trim((string)($img[$k] ?? ''));
+        if (mb_strlen($v) > $max) throw new HttpError(422, "El texto de la imagen es demasiado largo (máx. {$max} caracteres)", ['field' => 'share.' . $k]);
+        $out['image'][$k] = $v === '' ? null : $v;
+    }
+    $out['image']['visual'] = in_array($img['visual'] ?? '', ['drawings', 'banner', 'logo', 'none'], true) ? $img['visual'] : 'drawings';
+    foreach (['showOrganization', 'showUrl'] as $k) $out['image'][$k] = !empty($img[$k] ?? true);
+    return json_encode($out, JSON_UNESCAPED_UNICODE);
+}
 const DEFAULT_THANKS_MESSAGE = 'Recibirás en tu correo el comprobante con el folio, la fecha, la hora y la huella digital (hash) de tu firma.';
 
 /** Texto de autorización de datos tal como lo lee el firmante (sin el marcador {politica}). */
@@ -89,7 +123,9 @@ function event_public(array $e): array
             'enabled' => (bool)($e['share_enabled'] ?? true),
             // null = texto predeterminado
             'text' => trim((string)($e['share_text'] ?? '')) ?: null,
-        ],
+            // El banner puede usarse en la imagen para compartir aunque esté oculto en la página.
+            'bannerUrl' => !empty($e['banner_path']) ? $base . '/' . $e['banner_path'] : null,
+        ] + share_options($e),
         'thanks' => [
             'enabled' => (bool)($e['thanks_enabled'] ?? true),
             // null = texto predeterminado (el navegador lo adapta según se envíe o no el comprobante).
@@ -180,6 +216,7 @@ function event_from_input(array $b, ?array $current = null): array
         'thanks_message' => $text('thanksMessage', 'thanks_message', 2000, DEFAULT_THANKS_MESSAGE),
         'share_enabled' => $flag('shareEnabled', 'share_enabled'),
         'share_text' => $text('shareText', 'share_text', 280, DEFAULT_SHARE_TEXT),
+        'share_options' => array_key_exists('shareOptions', $b) ? share_options_from_input($b['shareOptions']) : ($current['share_options'] ?? null),
         'name' => $name,
         'slug' => $slug,
         'status' => $in($b['status'] ?? null, ['draft', 'published'], $current['status'] ?? 'draft'),

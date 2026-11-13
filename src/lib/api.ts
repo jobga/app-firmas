@@ -3,6 +3,7 @@
  * Animalista · Plataforma de firmas — © Jonnathan Bucheli Galindo
  */
 import { apiUrl } from './base';
+import type { ShareImageOptions } from './shareImage';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public field?: string, public data?: Record<string, unknown>) {
@@ -71,7 +72,13 @@ export type PublicEvent = {
   /** title/message en null = textos predeterminados. */
   thanks: { enabled: boolean; title: string | null; message: string | null };
   /** Compartir en Instagram y X al terminar; text en null = texto predeterminado ({evento} = nombre). */
-  share: { enabled: boolean; text: string | null };
+  share: {
+    enabled: boolean;
+    text: string | null;
+    bannerUrl: string | null;
+    networks: { instagram: boolean; x: boolean; copy: boolean };
+    image: ShareImageOptions;
+  };
   fields: { optional: Record<OptionalField, boolean>; custom: CustomField[] };
   municipalities: string[];
   codeTtlMinutes: number;

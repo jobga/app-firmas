@@ -48,4 +48,8 @@ return [
             . ' ADD COLUMN `share_enabled` TINYINT(1) NOT NULL DEFAULT 1 AFTER `thanks_message`,'
             . ' ADD COLUMN `share_text` VARCHAR(280) NULL AFTER `share_enabled`',
     ],
+    8 => [
+        // Redes habilitadas y textos/diseño de la imagen para compartir (JSON).
+        'ALTER TABLE `#__events` ADD COLUMN `share_options` TEXT NULL AFTER `share_text`',
+    ],
 ];

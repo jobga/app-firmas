@@ -34,7 +34,8 @@ export function ShareButtons({ event, onNotice }: { event: PublicEvent; onNotice
     setBusy(true);
     try {
       const blob = await renderShareImage({
-        eventName: event.name, organization: event.organization, url, colors: event.colors, drawings: event.lineDrawings,
+        eventName: event.name, organization: event.organization, url, colors: event.colors,
+        options: event.share.image, bannerUrl: event.share.bannerUrl, logoUrl: event.logoUrl,
       });
       const file = new File([blob], `firma-${event.slug}.png`, { type: 'image/png' });
       if (navigator.canShare?.({ files: [file] })) {
@@ -54,17 +55,24 @@ export function ShareButtons({ event, onNotice }: { event: PublicEvent; onNotice
     catch { onNotice(url); }
   };
 
+  const { networks } = event.share;
+  if (!networks.instagram && !networks.x && !networks.copy) return null;
+
   return (
     <div className="share" role="group" aria-label="Compartir la convocatoria">
       <span className="share__label">Invita a más personas a firmar</span>
       <div className="share__buttons">
-        <button type="button" className="btn btn--outline share__btn" onClick={instagram} disabled={busy}>
-          <InstagramGlyph />{busy ? 'Generando…' : 'Instagram'}
-        </button>
-        <a className="btn btn--outline share__btn" href={xIntentUrl(text, url)} target="_blank" rel="noopener noreferrer">
-          <XGlyph />X
-        </a>
-        <button type="button" className="btn btn--outline share__btn" onClick={copy}>Copiar enlace</button>
+        {networks.instagram && (
+          <button type="button" className="btn btn--outline share__btn" onClick={instagram} disabled={busy}>
+            <InstagramGlyph />{busy ? 'Generando…' : 'Instagram'}
+          </button>
+        )}
+        {networks.x && (
+          <a className="btn btn--outline share__btn" href={xIntentUrl(text, url)} target="_blank" rel="noopener noreferrer">
+            <XGlyph />X
+          </a>
+        )}
+        {networks.copy && <button type="button" className="btn btn--outline share__btn" onClick={copy}>Copiar enlace</button>}
       </div>
     </div>
   );
